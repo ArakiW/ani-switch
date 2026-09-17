@@ -252,6 +252,11 @@ void HistoryActivity::render(std::vector<SQLiteStore::HistoryEntry> v) {
             int64_t pos = e.positionMs;
             auto path = e.episodeName;
             row->registerClickAction([eid, pos, path](brls::View*) {
+                // Demo rows use negative episode ids — no player.
+                if (eid < 0) {
+                    brls::Application::notify("演示条目，无法播放");
+                    return true;
+                }
                 Intent::openPlayer(eid, "dandanplay", path, pos);
                 return true;
             });

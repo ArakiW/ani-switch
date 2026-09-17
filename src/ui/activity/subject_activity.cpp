@@ -115,6 +115,20 @@ void SubjectActivity::onContentAvailable() {
     presenter_.onComments.subscribe([this](std::vector<Comment> v) { onComments(std::move(v)); });
     presenter_.onRating.subscribe([this](SubjectRating r) { onRating(std::move(r)); });
     presenter_.onMyCollection.subscribe([this](UserCollection c) { onMyCollection(std::move(c)); });
+    presenter_.onSubjectError.subscribe([this](const std::string&) {
+        // v22 compose-next: real fetch failed → demo shell.
+        std::string name = "演示条目";
+        for (const auto& s : demo::subjects()) {
+            if (s.id == subjectId_) {
+                name = s.nameCN.empty() ? s.name : s.nameCN;
+                break;
+            }
+        }
+        if (subjectId_ > 0) name = "条目 " + std::to_string(subjectId_);
+        onSubject(demo::makeDetail(subjectId_, name));
+        onEpisodes(demo::episodesFor(subjectId_));
+        meta_->setText(demo::kBanner);
+    });
     presenter_.setSubjectId(subjectId_);
     if (subjectId_ < 0) {
         // v22 compose-next: demo sentinel ids skip the network.

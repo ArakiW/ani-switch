@@ -10,7 +10,14 @@ void SubjectPresenter::setSubjectId(int32_t id) { subjectId_ = id; }
 void SubjectPresenter::refresh() {
     if (subjectId_ == 0) return;
     const int32_t id = subjectId_;
-    auto error = [](const std::string& message, int) { brls::Logger::warning("subject: {}", message); };
+    auto error = [this, id](const std::string& message, int) {
+        brls::Logger::warning("subject: {}", message);
+        // v22: surface subject-level failure so the activity can
+        // fall back to the demo shell instead of a gray page.
+        uiCallback([this, id](const std::string& msg) {
+            if (id == subjectId_) onSubjectError.fire(msg);
+        })(message);
+    };
     BangumiClient::getSubject(id,
         uiCallback([this, id](Subject s) { if (id == subjectId_) onSubject.fire(std::move(s)); }), error);
     BangumiClient::getEpisodes(id, 0,

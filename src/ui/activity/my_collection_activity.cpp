@@ -78,14 +78,18 @@ void MyCollectionActivity::onContentAvailable() {
         cache_ = v;
         render(v);
     });
-    presenter_.onError.subscribe([](const std::string& m) {
+    presenter_.onError.subscribe([this](const std::string& m) {
         brls::Logger::warning("MyCollection: {}", m);
+        // v22: remote/local failure still fills the grid.
+        cache_.clear();
+        render(cache_);
     });
     if (ProgramConfig::instance().hasLoginInfo()) {
         presenter_.refreshFromRemote();
     } else {
-        presenter_.refreshFromLocal();
-        // v22 compose-next: not logged in → still show a filled grid.
+        // v22 compose-next: not logged in — do not call refreshFromLocal
+        // first (it can sync-render empty and drop the banner). Render
+        // demo directly so the banner stays.
         render(demo::collection());
     }
 }
@@ -137,7 +141,8 @@ void MyCollectionActivity::render(const std::vector<SQLiteStore::CollectionEntry
         if (filterType_ < 0 || e.type == filterType_) filtered.push_back(&e);
     }
 
-    if (filtered.empty()) {
+    const bool useDemo = filtered.empty();
+    if (useDemo) {
         // v22 compose-next: empty → demo grid under banner.
         auto* banner = new brls::Label();
         banner->setText(demo::kBanner);

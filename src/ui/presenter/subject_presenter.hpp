@@ -21,6 +21,8 @@ public:
     brls::Event<std::vector<Comment>>          onComments;
     brls::Event<SubjectRating>                 onRating;       // v17.2
     brls::Event<UserCollection>                onMyCollection; // v17.2
+    // v22: subject fetch failed — activity renders demo shell.
+    brls::Event<std::string>                   onSubjectError;
 
     void setSubjectId(int32_t id);
     void refresh();
