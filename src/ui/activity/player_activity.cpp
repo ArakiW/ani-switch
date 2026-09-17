@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 //
-// v22: TsVitch player graft — VideoView OSD + ani online download.
+// v22: TsVitch player graft — VideoView OSD + ani online download
+// (mp4 single-file + HLS m3u8 segment concat).
 #include "ui/activity/player_activity.hpp"
 #include "ui/theme.hpp"
 #include "player/tsvitch_video_view.hpp"
@@ -12,8 +13,10 @@
 #include "utils/sqlite_store.hpp"
 #include <borealis/core/logger.hpp>
 #include <borealis/core/thread.hpp>
+#include <cpr/cpr.h>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <fmt/format.h>
 
 #if defined(__SWITCH__)
@@ -40,7 +43,6 @@ PlayerActivity::~PlayerActivity() {
 
 void PlayerActivity::onContentAvailable() {
     PLOG("player: tsvitch onContentAvailable");
-    // Full-window VideoView — same as aniswitch player that painted OK.
     video_ = new VideoView();
     setContentView(video_);
     PLOG("player: VideoView as contentView");
@@ -56,7 +58,7 @@ void PlayerActivity::onContentAvailable() {
         return true;
     });
     PLOG("player: tsvitch shell ready");
-    // Explicit URL → play immediately.
+
     if (!videoSource_.empty() && videoSource_ != "http" &&
         videoSource_ != "dandanplay" && videoSource_ != "myani") {
         startPlayback(videoSource_);
@@ -72,13 +74,16 @@ void PlayerActivity::onContentAvailable() {
     }
     PLOG("player: resolve sources");
     std::weak_ptr<int> life = lifetime_;
-    EpisodeResolver::resolve(0, episodeId_,
+    EpisodeResolver::resolve(
+        0, episodeId_,
         [this, life](ResolvedEpisode result) {
             brls::sync([this, life, result] {
                 if (life.expired()) return;
                 subjectId_ = result.bangumiSubjectId;
-                if (resumePositionMs_ == 0) resumePositionMs_ = result.resumePositionMs;
-                auto source = SourceManager::instance().pickBest(result.sources);
+                if (resumePositionMs_ == 0)
+                    resumePositionMs_ = result.resumePositionMs;
+                auto source =
+                    SourceManager::instance().pickBest(result.sources);
                 if (!source) {
                     if (video_) {
                         video_->hideLoading();
@@ -92,7 +97,9 @@ void PlayerActivity::onContentAvailable() {
                         fallbackUrls_.push_back(s.url);
                 }
                 if (video_) {
-                    video_->setTitle(source->label.empty() ? result.title : source->label);
+                    video_->setTitle(source->label.empty()
+                                         ? result.title
+                                         : source->label);
                     video_->setCenterHintText("加载中…");
                 }
                 startPlayback(source->url);
@@ -113,8 +120,9 @@ void PlayerActivity::startPlayback(const std::string& url) {
     const bool network =
         url.rfind("http://", 0) == 0 || url.rfind("https://", 0) == 0;
 #if defined(__SWITCH__)
-    // mpv cannot resolve Clash fake-ip; download via our TLS/DNS stack.
-    if (network && url.find(".m3u8") == std::string::npos) {
+    // Switch mpv DNS cannot resolve Clash fake-ip / many CDNs.
+    // ALL network videos go through our TLS/DNS stack, including HLS.
+    if (network) {
         downloadThenPlay(url);
         return;
     }
@@ -127,60 +135,182 @@ void PlayerActivity::startPlayback(const std::string& url) {
 }
 
 #if defined(__SWITCH__)
+namespace {
+bool netFetch(const std::string& url, std::string& out, long* status) {
+    cpr::Session s;
+    HTTP::prepareFetchSession(s, url);
+    s.SetTimeout(cpr::Timeout{90000});
+    s.SetConnectTimeout(cpr::ConnectTimeout{15000});
+    s.SetHeader(cpr::Header{
+        {"User-Agent",
+         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+        {"Referer", "https://www.akianime.cc/"},
+        {"Accept", "*/*"},
+    });
+    auto r = s.Get();
+    if (status) *status = r.status_code;
+    if (r.error || r.status_code != 200) return false;
+    out = std::move(r.text);
+    return !out.empty();
+}
+
+std::string urlJoin(const std::string& base, const std::string& rel) {
+    if (rel.rfind("http://", 0) == 0 || rel.rfind("https://", 0) == 0)
+        return rel;
+    if (!rel.empty() && rel[0] == '/') {
+        auto s = base.find("://");
+        if (s == std::string::npos) return rel;
+        auto h = base.find('/', s + 3);
+        return base.substr(0, h == std::string::npos ? base.size() : h) + rel;
+    }
+    auto slash = base.find_last_of('/');
+    if (slash == std::string::npos) return base + "/" + rel;
+    return base.substr(0, slash + 1) + rel;
+}
+}  // namespace
+
 void PlayerActivity::downloadThenPlay(const std::string& url) {
     if (video_) {
-        video_->setCenterHintText("在线下载中…");
+        video_->setCenterHintText("在线获取中…");
         video_->showLoading();
     }
-    PLOG("player: downloadThenPlay");
+    {
+        char b[200];
+        snprintf(b, sizeof(b), "player: downloadThenPlay %s", url.c_str());
+        PLOG(b);
+    }
     try {
+        const bool isHls = url.find(".m3u8") != std::string::npos;
         uint64_t h = 1469598103934665603ULL;
         for (unsigned char c : url) { h ^= c; h *= 1099511628211ULL; }
-        const std::string out =
-            fmt::format("sdmc:/switch/aniswitch/vc_{:016x}.mp4", h);
-        cpr::Session s;
-        HTTP::prepareFetchSession(s, url);
-        s.SetTimeout(cpr::Timeout{180000});
-        s.SetConnectTimeout(cpr::ConnectTimeout{20000});
+        const std::string out = fmt::format(
+            "sdmc:/switch/aniswitch/vc_{:016x}{}", h, isHls ? ".ts" : ".mp4");
         std::ofstream file(out, std::ios::binary | std::ios::trunc);
-        size_t written = 0;
-        s.SetWriteCallback(cpr::WriteCallback{
-            [&file, &written](std::string data, intptr_t) -> bool {
-                if (!file) return false;
-                file.write(data.data(), static_cast<std::streamsize>(data.size()));
-                written += data.size();
-                return true;
-            }});
-        PLOG("player: dl get");
-        auto r = s.Get();
-        file.flush();
-        file.close();
-        std::error_code ec;
-        const auto fsize = std::filesystem::exists(out, ec)
-                               ? std::filesystem::file_size(out, ec) : 0;
-        {
-            char b[180];
-            snprintf(b, sizeof(b), "player: dl status=%ld bytes=%zu",
-                     r.status_code, written);
-            PLOG(b);
+        if (!file) throw std::runtime_error("cache open failed");
+        size_t total = 0;
+        long st = 0;
+
+        if (!isHls) {
+            cpr::Session s;
+            HTTP::prepareFetchSession(s, url);
+            s.SetTimeout(cpr::Timeout{180000});
+            s.SetHeader(cpr::Header{{"User-Agent", "Mozilla/5.0"},
+                                    {"Referer", "https://www.akianime.cc/"}});
+            s.SetWriteCallback(cpr::WriteCallback{
+                [&file, &total](std::string data, intptr_t) -> bool {
+                    file.write(data.data(),
+                               static_cast<std::streamsize>(data.size()));
+                    total += data.size();
+                    return true;
+                }});
+            auto r = s.Get();
+            file.close();
+            {
+                char b[80];
+                snprintf(b, sizeof(b), "player: dl status=%ld bytes=%zu",
+                         r.status_code, total);
+                PLOG(b);
+            }
+            if (r.error || r.status_code != 200 || total < 1024) {
+                if (video_) {
+                    video_->hideLoading();
+                    video_->setCenterHintText(
+                        fmt::format("下载失败 [{}]", r.status_code));
+                }
+                return;
+            }
+            PLOG("player: dl ok, play");
+            if (video_) video_->hideLoading();
+            startPlayback(out);
+            return;
         }
-        if (r.error || r.status_code != 200 || fsize < 1024) {
-            if (!fallbackUrls_.empty()) {
-                const std::string next = fallbackUrls_.front();
-                fallbackUrls_.erase(fallbackUrls_.begin());
-                startPlayback(next);
-            } else if (video_) {
+
+        // HLS: playlist → .ts segments → local concat → play
+        PLOG("player: hls get playlist");
+        std::string body;
+        if (!netFetch(url, body, &st)) {
+            char b[80];
+            snprintf(b, sizeof(b), "player: hls playlist fail st=%ld", st);
+            PLOG(b);
+            if (video_) {
                 video_->hideLoading();
-                video_->setCenterHintText(fmt::format("下载失败 [{}]", r.status_code));
+                video_->setCenterHintText(
+                    fmt::format("m3u8 获取失败 [{}]", st));
             }
             return;
         }
-        PLOG("player: dl ok, play");
-        if (video_) video_->hideLoading();
+        std::vector<std::string> segs;
+        std::istringstream iss(body);
+        std::string line;
+        while (std::getline(iss, line)) {
+            while (!line.empty() &&
+                   (line.back() == '\r' || line.back() == '\n'))
+                line.pop_back();
+            if (line.empty() || line[0] == '#') continue;
+            segs.push_back(urlJoin(url, line));
+        }
+        {
+            char b[80];
+            snprintf(b, sizeof(b), "player: hls segments=%zu", segs.size());
+            PLOG(b);
+        }
+        if (segs.empty()) {
+            if (video_) {
+                video_->hideLoading();
+                video_->setCenterHintText("m3u8 无分片");
+            }
+            return;
+        }
+        // Cap first playable slice so Eden/Switch can show picture
+        // without downloading a full 24-min episode first.
+        size_t maxSegs = segs.size();
+        if (maxSegs > 40) {
+            maxSegs = 40;  // ~5–6 minutes of anime
+            PLOG("player: hls cap first 40 segments");
+        }
+        for (size_t i = 0; i < maxSegs; ++i) {
+            if (video_ && (i % 4 == 0)) {
+                video_->setCenterHintText(
+                    fmt::format("下载分片 {}/{}", i + 1, maxSegs));
+            }
+            std::string chunk;
+            if (!netFetch(segs[i], chunk, &st) || chunk.empty()) {
+                char b[96];
+                snprintf(b, sizeof(b), "player: hls seg %zu fail st=%ld",
+                         i, st);
+                PLOG(b);
+                continue;
+            }
+            file.write(chunk.data(),
+                       static_cast<std::streamsize>(chunk.size()));
+            total += chunk.size();
+        }
+        file.flush();
+        file.close();
+        {
+            char b[80];
+            snprintf(b, sizeof(b), "player: hls concat %zu bytes", total);
+            PLOG(b);
+        }
+        if (total < 4096) {
+            if (video_) {
+                video_->hideLoading();
+                video_->setCenterHintText("在线分片下载失败");
+            }
+            return;
+        }
+        PLOG("player: hls done, play");
+        if (video_) {
+            video_->hideLoading();
+            video_->setCenterHintText(
+                fmt::format("在线源 {:.1f} MB", total / 1048576.0));
+        }
         startPlayback(out);
-        // Kick one more frame after load.
         if (video_) video_->invalidate();
     } catch (const std::exception& e) {
+        char b[160];
+        snprintf(b, sizeof(b), "player: dl exception %s", e.what());
+        PLOG(b);
         if (video_) {
             video_->hideLoading();
             video_->setCenterHintText(std::string("下载异常: ") + e.what());

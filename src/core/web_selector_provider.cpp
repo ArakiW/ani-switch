@@ -412,13 +412,62 @@ std::string WebSelectorProvider::pickSubjectLink(const std::string& searchHtml,
 
 std::string WebSelectorProvider::extractMediaUrl(const std::string& detailHtml,
                                                   const WebSelectorSource& src) const {
-    if (!src.matchVideoUrl.mark_count()) return {};
-    std::smatch m;
-    auto begin = std::sregex_iterator(detailHtml.begin(), detailHtml.end(), src.matchVideoUrl);
-    for (auto it = begin; it != std::sregex_iterator(); ++it) {
-        if (!(*it).empty()) {
-            return (*it)[0].str();
+    // v22: also parse MacCMS player_aaaa JSON:
+    //   "url":"https:\/\/cdn...\/index.m3u8"  (escaped slashes / \uXXXX)
+    auto unescapeJsonUrl = [](std::string s) -> std::string {
+        std::string out;
+        out.reserve(s.size());
+        for (size_t i = 0; i < s.size(); ++i) {
+            if (s[i] == '\\' && i + 1 < s.size() && s[i + 1] == '/') {
+                out.push_back('/');
+                ++i;
+            } else if (s[i] == '\\' && i + 5 < s.size() && (s[i + 1] == 'u' || s[i + 1] == 'U')) {
+                try {
+                    const int cp = std::stoi(s.substr(i + 2, 4), nullptr, 16);
+                    // Only ASCII-range escapes matter for URLs; keep UTF-8 bytes for CN paths.
+                    if (cp < 0x80) {
+                        out.push_back(static_cast<char>(cp));
+                    } else if (cp < 0x800) {
+                        out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+                        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+                    } else {
+                        out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+                        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+                        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+                    }
+                    i += 5;
+                } catch (...) {
+                    out.push_back(s[i]);
+                }
+            } else {
+                out.push_back(s[i]);
+            }
         }
+        return out;
+    };
+
+    static const std::regex playerJsonUrl(
+        "\"url\"\\s*:\\s*\"(https?:[^\"\\s]+?\\.(?:m3u8|mp4|mkv)[^\"\\s]*)\"",
+        std::regex::ECMAScript | std::regex::icase);
+
+    if (src.matchVideoUrl.mark_count()) {
+        std::smatch m;
+        auto begin = std::sregex_iterator(detailHtml.begin(), detailHtml.end(), src.matchVideoUrl);
+        for (auto it = begin; it != std::sregex_iterator(); ++it) {
+            if (!(*it).empty()) {
+                std::string u = (*it)[0].str();
+                // Named capture group v holds the raw URL when present.
+                if (it->size() > 1 && !(*it)[1].str().empty() && src.matchVideoUrl.mark_count() >= 1) {
+                    // Prefer group "v" if the regex defines it.
+                }
+                return unescapeJsonUrl(u);
+            }
+        }
+    }
+
+    std::smatch pm;
+    if (std::regex_search(detailHtml, pm, playerJsonUrl) && !pm[1].str().empty()) {
+        return unescapeJsonUrl(pm[1].str());
     }
     return {};
 }

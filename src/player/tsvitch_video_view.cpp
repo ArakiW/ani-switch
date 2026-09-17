@@ -45,6 +45,17 @@ VideoView::~VideoView() {
 void VideoView::setUrl(const std::string& url) {
     showLoading();
     hideCenterHint();
+    // Animeko-source HLS mirrors require a Referer; set before loadfile.
+    if (url.find("m3u8") != std::string::npos ||
+        url.find("rrcdnbf") != std::string::npos ||
+        url.find("bfengbf") != std::string::npos) {
+        mpvCore_->command_async("set", "http-header-fields",
+                                "Referer: https://www.akianime.cc/");
+        mpvCore_->command_async("set", "user-agent",
+                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                "Chrome/120.0.0.0 Safari/537.36");
+    }
     mpvCore_->setUrl(url);
     registerMpvEvent();
     brls::Logger::info("VideoView: setUrl {}", url);

@@ -209,9 +209,16 @@ void MainActivity::onContentAvailable() {
                 else if (mode == "settings") Intent::openSettings();
                 else if (mode == "subject") Intent::openSubject(-1);
                 else if (mode == "online") {
-                    Intent::openSourcePicker(1656858, 0, "在线演示源", true);
+                    // APP 内真实资源: 秋之动漫(animeko-source) 上的
+                    // 《葬送的芙莉莲》 → Bangumi sid 400602 ep 1227087
+                    Intent::openSubject(400602);
+                    brls::delay(2000, []() {
+                        Intent::openSourcePicker(1227087, 400602,
+                                                 "葬送的芙莉莲 EP1", true);
+                    });
                 } else if (mode == "picker") {
-                    Intent::openSourcePicker(1656858, 0, "选源测试", false);
+                    Intent::openSourcePicker(1227087, 400602,
+                                             "葬送的芙莉莲 EP1", true);
                 } else if (mode == "player") {
                     Intent::openPlayer(-1, "",
                                        "sdmc:/switch/aniswitch/videos/test-local.mp4",
