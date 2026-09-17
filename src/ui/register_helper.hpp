@@ -1,26 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0
 //
-// ani-switch PATCH (2026-09-02): wiliwili's register_helper registers
-// every fragment/presenter for the B站 app. Our app is a Bangumi client
-// with a different fragment set, so we provide a minimal stub here that
-// the real main.cpp can call. The full wiliwili implementation is at
-// wiliwili-reference/wiliwili/source/utils/register_helper.cpp.
-
+// ani-switch PATCH: register TsVitch player XML views for borealis.
 #pragma once
 
 #include <borealis.hpp>
+#include "player/tsvitch_video_view.hpp"
+#include "player/tsvitch_svg_image.hpp"
+#include "player/tsvitch_video_profile.hpp"
+#include "player/tsvitch_video_progress_slider.hpp"
+#include "player/tsvitch_hint_label.hpp"
 
 namespace aniswitch {
 
-// Register any application-specific views / activities with brls.
-// In the full wiliwili this would register every fragment XML; here
-// we register nothing extra because our main activity is set up
-// programmatically in main_activity.cpp.
-inline void registerViewsForXML() {}
+inline void registerViewsForXML() {
+    brls::Application::registerXMLView("VideoView", VideoView::create);
+    brls::Application::registerXMLView("SVGImage", SVGImage::create);
+    brls::Application::registerXMLView("VideoProfile", VideoProfile::create);
+    brls::Application::registerXMLView("VideoProgressSlider", VideoProgressSlider::create);
+    brls::Application::registerXMLView("HintLabel", HintLabel::create);
+}
 
-// wiliwili calls this from main() to populate brls::Application's
-// view registry before the first activity runs. Keeping the same
-// symbol so main.cpp doesn't need a different signature.
 inline void registerAllViews() { registerViewsForXML(); }
 
 }  // namespace aniswitch

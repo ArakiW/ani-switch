@@ -1,0 +1,320 @@
+﻿#include <borealis/views/rectangle.hpp>
+#include <borealis/core/application.hpp>
+#include <borealis/core/touch/pan_gesture.hpp>
+#include <borealis/core/touch/tap_gesture.hpp>
+
+#include "player/tsvitch_video_progress_slider.hpp"
+#include "player/tsvitch_svg_image.hpp"
+
+VideoProgressSlider::VideoProgressSlider() {
+    input = brls::Application::getPlatform()->getInputManager();
+
+    line        = new brls::Rectangle();
+    lineEmpty   = new brls::Rectangle();
+    pointerIcon = new SVGImage();
+    pointer     = new brls::Box();
+
+    line->detach();
+    lineEmpty->detach();
+    pointer->detach();
+
+    setHeight(40);
+
+    line->setHeight(7);
+    line->setCornerRadius(3.5f);
+
+    lineEmpty->setHeight(7);
+    lineEmpty->setCornerRadius(3.5f);
+
+    this->registerBoolXMLAttribute("disabledPointerGesture", [this](bool value) {
+        brls::Logger::debug("VideoProgressSlider: disabledPointerGesture = {}", value);
+
+        this->disabledPointerGesture = value;
+        if (!value) {
+            pointer->addGestureRecognizer(new brls::PanGestureRecognizer(
+                [this](brls::PanGestureStatus status, brls::Sound* soundToPlay) {
+                    // Controlla se i gesture sono disabilitati
+                    if (this->disabledPointerGesture) return;
+                    
+                    brls::Application::giveFocus(pointer);
+
+                    static float lastProgress = progress;
+
+                    if (status.state == brls::GestureState::UNSURE) {
+                        *soundToPlay = brls::SOUND_FOCUS_CHANGE;
+                        return;
+                    }
+
+                    else if (status.state == brls::GestureState::INTERRUPTED ||
+                             status.state == brls::GestureState::FAILED) {
+                        *soundToPlay = brls::SOUND_TOUCH_UNFOCUS;
+                        return;
+                    }
+
+                    else if (status.state == brls::GestureState::START) {
+                        lastProgress = progress;
+                    }
+
+                    float paddingWidth = getWidth() - pointer->getWidth();
+                    float delta        = status.position.x - status.startPosition.x;
+
+                    setProgress(lastProgress + delta / paddingWidth);
+                    progressEvent.fire(this->progress);
+
+                    if (status.state == brls::GestureState::END) {
+                        brls::Application::getPlatform()->getAudioPlayer()->play(brls::SOUND_SLIDER_RELEASE);
+                        progressSetEvent.fire(this->progress);
+                        brls::Application::giveFocus(this->getParentActivity()->getContentView());
+                    }
+                },
+                brls::PanAxis::HORIZONTAL));
+
+            this->addGestureRecognizer(
+                new brls::TapGestureRecognizer([this](brls::TapGestureStatus status, brls::Sound* soundToPlay) {
+                    // Controlla se i gesture sono disabilitati
+                    if (this->disabledPointerGesture) return;
+                    
+                    if (status.state != brls::GestureState::END) return;
+                    float paddingWidth = getWidth() - pointer->getWidth();
+                    float delta        = status.position.x - pointer->getWidth() / 2 - pointer->getX();
+                    setProgress(progress + delta / paddingWidth);
+                    progressSetEvent.fire(this->progress);
+                    brls::Application::giveFocus(this->getParentActivity()->getContentView());
+                }));
+        }
+    });
+
+        pointerIcon->setDimensions(44, 44);
+    pointerIcon->setImageFromSVGRes("svg/bpx-svg-sprite-thumb.svg");
+    pointerIcon->setTranslationY(-10.02f);
+    
+
+    pointer->setDimensions(60, 60);
+    pointer->setFocusable(true);
+    pointer->setHighlightCornerRadius(60);
+    pointer->setHideHighlightBackground(true);
+    pointer->setHideClickAnimation(true);
+    pointer->setAlignItems(brls::AlignItems::CENTER);
+    pointer->setJustifyContent(brls::JustifyContent::CENTER);
+    pointer->addView(pointerIcon);
+    this->forwardXMLAttribute("focusUp", pointer);
+    this->forwardXMLAttribute("focusRight", pointer);
+
+    pointer->registerClickAction([this](...) {
+        // Se i gesture sono disabilitati, non permettere click
+        if (this->disabledPointerGesture) return false;
+        
+        pointerSelected = !pointerSelected;
+        pointer->setHideHighlightBackground(!pointerSelected);
+        ignoreProgressSetting = pointerSelected;
+        if (!pointerSelected) progressSetEvent.fire(this->progress);
+        return true;
+    });
+
+    pointer->registerAction("left", brls::BUTTON_NAV_LEFT, [this](...) { 
+        // Se i gesture sono disabilitati, non permettere navigazione
+        if (this->disabledPointerGesture) return false;
+        return pointerSelected; 
+    }, true, true);
+
+    pointer->registerAction("right", brls::BUTTON_NAV_RIGHT, [this](...) { 
+        // Se i gesture sono disabilitati, non permettere navigazione
+        if (this->disabledPointerGesture) return false;
+        return pointerSelected; 
+    }, true, true);
+
+    pointer->registerAction(
+        "up", brls::BUTTON_NAV_UP,
+        [this](...) {
+            // Se i gesture sono disabilitati, non permettere navigazione
+            if (this->disabledPointerGesture) return false;
+            if (pointerSelected) pointer->shakeHighlight(brls::FocusDirection::UP);
+            return pointerSelected;
+        },
+        true, true);
+
+    pointer->registerAction(
+        "down", brls::BUTTON_NAV_DOWN,
+        [this](...) {
+            // Se i gesture sono disabilitati, non permettere navigazione
+            if (this->disabledPointerGesture) return false;
+            if (pointerSelected) pointer->shakeHighlight(brls::FocusDirection::DOWN);
+            return pointerSelected;
+        },
+        true, true);
+
+    pointer->registerAction("cancel", brls::BUTTON_B, [this](...) { 
+        // Se i gesture sono disabilitati, non permettere cancellazione
+        if (this->disabledPointerGesture) return false;
+        return cancelPointerChange(); 
+    });
+
+    addView(pointer);
+    addView(line);
+    addView(lineEmpty);
+
+    brls::Theme theme = brls::Application::getTheme();
+
+    line->setColor(theme["color/tsvitch"]);
+    lineEmpty->setColor(theme["brls/slider/line_empty"]);
+
+    progress     = 0;
+    lastProgress = 0;
+}
+
+brls::View* VideoProgressSlider::create() { return new VideoProgressSlider(); }
+
+void VideoProgressSlider::onLayout() {
+    Box::onLayout();
+    updateUI();
+}
+
+brls::View* VideoProgressSlider::getDefaultFocus() { return pointer; }
+
+void VideoProgressSlider::setProgress(float progress) {
+    lastProgress = progress;
+    if (ignoreProgressSetting) return;
+
+    this->progress = progress;
+    if (this->progress < 0) this->progress = 0;
+    if (this->progress > 1) this->progress = 1;
+    updateUI();
+}
+
+void VideoProgressSlider::updateUI() {
+    float paddingWidth   = getWidth() - pointer->getWidth();
+    float lineStart      = pointer->getWidth() / 2;
+    float lineStartWidth = paddingWidth * progress;
+    float lineEnd        = paddingWidth * progress + pointer->getWidth() / 2;
+    float lineEndWidth   = paddingWidth * (1 - progress);
+    float lineYPos       = getHeight() / 2 - line->getHeight() / 2;
+
+    line->setDetachedPosition(lineStart, lineYPos);
+    line->setWidth(lineStartWidth);
+
+    lineEmpty->setDetachedPosition(round(lineEnd), lineYPos);
+    lineEmpty->setWidth(lineEndWidth);
+
+    pointer->setDetachedPosition(lineEnd - pointer->getWidth() / 2, getHeight() / 2 - pointer->getHeight() / 2);
+}
+
+VideoProgressSlider::~VideoProgressSlider() = default;
+
+void VideoProgressSlider::addClipPoint(float point) { clipPointList.emplace_back(point); }
+
+void VideoProgressSlider::clearClipPoint() { clipPointList.clear(); }
+
+void VideoProgressSlider::setClipPoint(const std::vector<float>& data) { clipPointList = data; }
+
+const std::vector<float>& VideoProgressSlider::getClipPoint() { return clipPointList; }
+
+void VideoProgressSlider::draw(NVGcontext* vg, float x, float y, float width, float height, brls::Style style,
+                               brls::FrameContext* ctx) {
+    if (pointerSelected) {
+        buttonsProcessing();
+    }
+
+    for (View* child : this->getChildren()) {
+        if (child == this->pointer) {
+            nvgBeginPath(vg);
+            nvgFillColor(vg, a(nvgRGBf(1.0f, 1.0f, 1.0f)));
+            for (auto& i : clipPointList) {
+                nvgCircle(vg, x + 32 + i * (width - 64), y + height / 2, 3);
+            }
+            nvgFill(vg);
+        }
+        child->frame(ctx);
+    }
+}
+
+void VideoProgressSlider::buttonsProcessing() {
+    // Se i gesture sono disabilitati, non processare i pulsanti
+    if (this->disabledPointerGesture) return;
+    
+    brls::ControllerState state{};
+    input->updateUnifiedControllerState(&state);
+    static bool repeat = false;
+
+    if (state.buttons[brls::BUTTON_NAV_RIGHT] && state.buttons[brls::BUTTON_NAV_LEFT]) return;
+
+    float step = 0.2f;
+
+    if (state.buttons[brls::BUTTON_NAV_RIGHT]) {
+        progress += step / brls::Application::getFPS();
+        if (progress >= 1 && !repeat) {
+            repeat = true;
+            pointer->shakeHighlight(brls::FocusDirection::RIGHT);
+        }
+    }
+
+    if (state.buttons[brls::BUTTON_NAV_LEFT]) {
+        progress -= step / brls::Application::getFPS();
+        if (progress <= 0 && !repeat) {
+            repeat = true;
+            pointer->shakeHighlight(brls::FocusDirection::LEFT);
+        }
+    }
+
+    if (progress > 1) progress = 1;
+    if (progress < 0) progress = 0;
+    progressEvent.fire(progress);
+    updateUI();
+
+    if ((!state.buttons[brls::BUTTON_NAV_RIGHT] && !state.buttons[brls::BUTTON_NAV_LEFT]) ||
+        (progress > 0.01f && progress < 0.99f)) {
+        repeat = false;
+    }
+}
+
+void VideoProgressSlider::onChildFocusLost(brls::View* directChild, brls::View* focusedView) {
+    Box::onChildFocusLost(directChild, focusedView);
+    if (directChild == pointer) {
+        cancelPointerChange();
+    }
+}
+
+bool VideoProgressSlider::cancelPointerChange() {
+    if (!pointerSelected) return false;
+    pointerSelected       = false;
+    ignoreProgressSetting = false;
+    pointer->setHideHighlightBackground(true);
+    this->progress = lastProgress;
+    if (this->progress < 0) this->progress = 0;
+    if (this->progress > 1) this->progress = 1;
+    updateUI();
+    return true;
+}
+
+void VideoProgressSlider::setDisabledPointerGesture(bool disabled) {
+    brls::Logger::debug("VideoProgressSlider: setDisabledPointerGesture = {}", disabled);
+    this->disabledPointerGesture = disabled;
+    
+    // Disabilita/riabilita il focus del pointer
+    pointer->setFocusable(!disabled);
+}
+
+void VideoProgressSlider::setPointerVisible(bool visible) {
+    if (pointer) {
+        pointer->setVisibility(visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        brls::Logger::debug("VideoProgressSlider: Pointer visibility set to {}", visible ? "visible" : "hidden");
+    }
+}
+
+void VideoProgressSlider::updateGestures() {
+    // Re-enable gesture recognizers after pointer interaction
+    if (pointer) {
+        brls::Logger::debug("VideoProgressSlider: Gesture recognizers updated");
+    } else {
+        brls::Logger::warning("VideoProgressSlider: Cannot update gestures - pointer is null");
+    }
+}
+
+void VideoProgressSlider::clearGestureRecognizers() {
+    // Clear all gesture recognizers to prevent memory leaks
+    if (pointer) {
+        brls::Logger::debug("VideoProgressSlider: Gesture recognizers cleared");
+    } else {
+        brls::Logger::debug("VideoProgressSlider: Pointer already null");
+    }
+}
+

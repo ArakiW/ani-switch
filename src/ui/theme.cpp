@@ -28,6 +28,8 @@ void registerDarkTheme() {
     dark.addColor("ani_tag_genre",      kTagGenre);
     dark.addColor("ani_tag_cast",       kTagCast);
     dark.addColor("ani_tag_meta",       kTagMeta);
+    // TsVitch player port: OSD bottom bar accent.
+    dark.addColor("color/tsvitch", kAccentBright);
     // v22 P0: TV focus — brand purple ring instead of borealis cyan.
     dark.addColor("brls/highlight/color1", kAccentBright);
     dark.addColor("brls/highlight/color2", nvgRGB(196, 181, 253));
@@ -56,6 +58,7 @@ void registerLightTheme() {
     light.addColor("ani_tag_genre",      kTagGenre);
     light.addColor("ani_tag_cast",       kTagCast);
     light.addColor("ani_tag_meta",       kTagMeta);
+    light.addColor("color/tsvitch", kAccent);
     light.addColor("brls/highlight/color1", nvgRGB(91, 63, 168));
     light.addColor("brls/highlight/color2", kAccent);
     light.addColor("brls/highlight/background", nvgRGBA(79, 55, 139, 32));

@@ -1,422 +1,200 @@
 // SPDX-License-Identifier: AGPL-3.0
+//
+// v22: TsVitch player graft — VideoView OSD + ani online download.
 #include "ui/activity/player_activity.hpp"
+#include "player/tsvitch_video_view.hpp"
 #include "player/mpv_core.hpp"
-#include "player/video_view.hpp"
-#include "player/subtitle_core.hpp"
-#include "player/danmaku_renderer.hpp"
 #include "core/episode_resolver.hpp"
-#include "net/myani_client.hpp"
-#include "net/dandanplay_client.hpp"
-#include "net/dandan_types.hpp"
-#include "net/danmaku_parser.hpp"
+#include "core/source_manager.hpp"
+#include "net/http.hpp"
 #include "utils/config_helper.hpp"
 #include "utils/sqlite_store.hpp"
-#include "net/http.hpp"
+#include <borealis/core/logger.hpp>
 #include <borealis/core/thread.hpp>
-#include <borealis/core/touch/tap_gesture.hpp>
-#include <cpr/cpr.h>
-#include <fstream>
 #include <filesystem>
-#include <thread>
+#include <fstream>
 #include <fmt/format.h>
 
-#if defined(__SWITCH__) && defined(ANISWITCH_SWITCH_DEBUG)
+#if defined(__SWITCH__)
 extern "C" void aniswitchStartupLog(const char*);
-#define PLAYER_TRACE(msg) aniswitchStartupLog(msg)
+#define PLOG(m) aniswitchStartupLog(m)
 #else
-#define PLAYER_TRACE(msg) do { (void)0; } while (0)
+#define PLOG(m) do { (void)0; } while (0)
 #endif
 
 namespace aniswitch {
-PlayerActivity::PlayerActivity(int32_t episodeId, const std::string&, const std::string& videoSource,
+
+PlayerActivity::PlayerActivity(int32_t episodeId, const std::string&,
+                               const std::string& videoSource,
                                int64_t resumePositionMs)
-    : episodeId_(episodeId), videoSource_(videoSource), resumePositionMs_(resumePositionMs) {}
+    : episodeId_(episodeId), videoSource_(videoSource),
+      resumePositionMs_(resumePositionMs) {}
 
 PlayerActivity::~PlayerActivity() {
     lifetime_.reset();
-    if (!subscribed_) return;
-    try { checkpoint(); } catch (const std::exception& e) { brls::Logger::error("Save progress failed: {}", e.what()); }
-    MPVCore::instance().getEvent()->unsubscribe(subscription_);
-    MPVCore::instance().stop();
-    DanmakuRenderer::instance().clear();
+    try { MPVCore::instance().stop(); } catch (...) {}
 }
 
 void PlayerActivity::onContentAvailable() {
-    auto& config = ProgramConfig::instance();
-    MPVCore::HARDWARE_DEC = config.getIntOption(SettingItem::PLAYER_HWDEC) != 1;
-    MPVCore::AUTO_PLAY = config.getBoolOption(SettingItem::PLAYER_AUTO_PLAY);
-    MPVCore::VIDEO_VOLUME = config.getIntOption(SettingItem::PLAYER_VOLUME);
-    DanmakuCore::DANMAKU_ON = config.getBoolOption(SettingItem::DANMAKU_ON);
-    DanmakuCore::DANMAKU_SMART_MASK = false;
-    DanmakuCore::DANMAKU_STYLE_ALPHA = config.getIntOption(SettingItem::DANMAKU_STYLE_ALPHA);
-    DanmakuCore::DANMAKU_STYLE_FONTSIZE = config.getIntOption(SettingItem::DANMAKU_STYLE_FONTSIZE);
-    auto* root = new brls::Box();
-    root->setAxis(brls::Axis::COLUMN);
-    root->setBackground(brls::ViewBackground::NONE);
-    auto* video = new VideoView();
-    video->setGrow(1);
-    PLAYER_TRACE("player: VideoView created");
-    // Touch UX: tap the video to pause / resume (the on-screen button
-    // bar still exists for controller users; the tap gesture is for
-    // handheld-mode touch).  The recognizer only fires on END (a
-    // real tap, not a swipe), so the player isn't paused mid-swipe
-    // when we eventually add seek-by-swipe.  brls's default tap
-    // config highlights the view on press for visual feedback; the
-    // MPV render surface is unaffected.
-    video->addGestureRecognizer(new brls::TapGestureRecognizer(video,
-        [this]() {
-            auto& p = MPVCore::instance();
-            if (p.isPaused()) p.resume();
-            else p.pause();
-        }));
-    root->addView(video);
-    status_ = new brls::Label();
-    status_->setText("准备播放");
-    status_->setTextColor(nvgRGB(255, 255, 255));
-    status_->setBackgroundColor(nvgRGB(0, 0, 0));
-    status_->setBackground(brls::ViewBackground::SHAPE_COLOR);
-    root->addView(status_);
-    auto* controls = new brls::Box();
-    controls->setAxis(brls::Axis::ROW);
-    auto add = [controls](const std::string& text, std::function<void()> action) {
-        auto* button = new brls::Button();
-        button->setText(text);
-        button->registerClickAction([action](brls::View*) { action(); return true; });
-        controls->addView(button);
-    };
-    add("暂停/播放", [] { auto& p = MPVCore::instance(); if (p.isPaused()) p.resume(); else p.pause(); });
-    add("-10秒", [] { MPVCore::instance().seekRelative(-10); });
-    add("+10秒", [] { MPVCore::instance().seekRelative(10); });
-    add("字幕", [] {
-        auto tracks = SubtitleCore::tracks();
-        if (tracks.empty()) { brls::Application::notify("未发现字幕，可在视频旁放同名 .srt/.ass"); return; }
-        for (size_t i = 0; i < tracks.size(); ++i) {
-            if (!tracks[i].selected) continue;
-            if (i + 1 < tracks.size()) SubtitleCore::select(tracks[i + 1].id);
-            else SubtitleCore::disable();
-            return;
-        }
-        SubtitleCore::select(tracks.front().id);
-    });
-    add("弹幕", [] { DanmakuCore::DANMAKU_ON = !DanmakuCore::DANMAKU_ON; });
-    add("发弹幕", [this] {
-        if (episodeId_ <= 0) {
-            brls::Application::notify("当前没有关联 Bangumi 集数 ID，不能发弹幕");
-            return;
-        }
-        // Capture the current playback time so the server-side timestamp
-        // (currently 0 in our payload) gets anchored to "now" on display.
-        const double now = MPVCore::instance().getPlaybackTime();
-        brls::Application::getImeManager()->openForText(
-            [this, now](std::string text) {
-                if (text.empty()) return;
-                DanmakuRenderer::instance().sendLocal(text);   // local echo
-                MyaniClient::instance().sendDanmaku(
-                    episodeId_, text, MyaniLocation::NORMAL, 0xFFFFFF,
-                    [](MyaniDanmaku) {
-                        brls::Application::notify("弹幕已发送");
-                    },
-                    [](const std::string& msg, int code) {
-                        brls::Logger::warning("myani send failed [{}]: {}", code, msg);
-                        brls::Application::notify("发送失败: " + msg);
-                    });
-            },
-            "发弹幕", "", 200);
-    });
-    add("返回", [] { brls::Application::popActivity(); });
-    root->addView(controls);
-    setContentView(root);
-    registerAction("暂停/播放", brls::BUTTON_X, [](brls::View*) {
-        auto& player = MPVCore::instance();
-        if (player.isPaused()) player.resume(); else player.pause();
-        return true;
-    });
-    registerAction("返回", brls::BUTTON_B, [](brls::View*) { brls::Application::popActivity(); return true; });
+    video_ = dynamic_cast<VideoView*>(getView("video"));
+    if (video_) {
+        video_->setTitle(fmt::format("播放 {}", episodeId_));
+        video_->setVideoMode();
+        video_->showLoading();
+        // B = OSD lock / exit (TsVitch pattern).
+        video_->registerAction("", brls::BUTTON_B, [this](brls::View*) {
+            if (video_->isOSDLock()) {
+                video_->toggleOSD();
+            } else if (video_->isOSDShown()) {
+                video_->toggleOSD();
+            } else {
+                brls::Application::popActivity();
+            }
+            return true;
+        });
+        video_->registerAction("暂停", brls::BUTTON_X, [this](brls::View*) {
+            video_->togglePlay();
+            return true;
+        });
+        video_->registerAction("返回列表", brls::BUTTON_Y, [this](brls::View*) {
+            brls::Application::popActivity();
+            return true;
+        });
+    }
 
-    PLAYER_TRACE("player: MPVCore::instance begin");
-    auto& player = MPVCore::instance();
-    PLAYER_TRACE("player: MPVCore::instance done");
-    player.command_async("set", "hwdec", MPVCore::HARDWARE_DEC ? MPVCore::PLAYER_HWDEC_METHOD : "no");
-    player.command_async("set", "sub-auto", "fuzzy");
-    player.setVolume(MPVCore::VIDEO_VOLUME);
-    PLAYER_TRACE("player: commands sent");
-    subscription_ = player.getEvent()->subscribe([this](MpvEventEnum event) { onPlayerEvent(event); });
-    subscribed_ = true;
-    PLAYER_TRACE("player: subscribed");
-    if (videoSource_ != "http" && !videoSource_.empty()) { start(videoSource_); return; }
-    std::weak_ptr<int> lifetime = lifetime_;
-    auto prompt = [this, lifetime] {
-        if (lifetime.expired()) return;
-        status_->setText("请提供本地视频路径或 HTTP(S) 地址；条目信息不是视频源");
-        brls::Application::getImeManager()->openForText([this, lifetime](std::string path) {
-            if (!lifetime.expired() && !path.empty()) start(path);
-        }, "视频地址或本地路径", "", 2048);
-    };
-    if (episodeId_ <= 0) { brls::sync(prompt); return; }
-    status_->setText(fmt::format("解析在线源… (ep {})", episodeId_));
-    EpisodeResolver::resolve(0, episodeId_, [this, lifetime, prompt](ResolvedEpisode result) {
-        brls::sync([this, lifetime, prompt, result] {
-            if (lifetime.expired()) return;
-            subjectId_ = result.bangumiSubjectId;
-            if (resumePositionMs_ == 0) resumePositionMs_ = result.resumePositionMs;
-            auto source = SourceManager::instance().pickBest(result.sources);
-            if (source) {
-                // Keep the rest as fallbacks if this URL fails to load.
+    PLOG("player: tsvitch shell ready");
+    // Explicit URL → play immediately.
+    if (!videoSource_.empty() && videoSource_ != "http" &&
+        videoSource_ != "dandanplay" && videoSource_ != "myani") {
+        startPlayback(videoSource_);
+        return;
+    }
+    if (episodeId_ <= 0) {
+        if (video_) video_->setCenterHintText("没有可播放的源");
+        return;
+    }
+    if (video_) {
+        video_->setCenterHintText("解析播放源…");
+        video_->showLoading();
+    }
+    PLOG("player: resolve sources");
+    std::weak_ptr<int> life = lifetime_;
+    EpisodeResolver::resolve(0, episodeId_,
+        [this, life](ResolvedEpisode result) {
+            brls::sync([this, life, result] {
+                if (life.expired()) return;
+                subjectId_ = result.bangumiSubjectId;
+                if (resumePositionMs_ == 0) resumePositionMs_ = result.resumePositionMs;
+                auto source = SourceManager::instance().pickBest(result.sources);
+                if (!source) {
+                    if (video_) {
+                        video_->hideLoading();
+                        video_->setCenterHintText("没有可用在线源");
+                    }
+                    return;
+                }
                 fallbackUrls_.clear();
                 for (const auto& s : result.sources) {
                     if (s.url != source->url && !s.url.empty())
                         fallbackUrls_.push_back(s.url);
                 }
-                status_->setText(fmt::format("在线播放: {}",
-                                             source->label.empty() ? source->url
-                                                                   : source->label));
-                start(source->url);
-            } else {
-                status_->setText("没有可用在线源，可手动输入地址");
-                prompt();
-            }
+                if (video_) {
+                    video_->setTitle(source->label.empty() ? result.title : source->label);
+                    video_->setCenterHintText("加载中…");
+                }
+                startPlayback(source->url);
+            });
+        },
+        [this, life](const std::string& msg, int) {
+            brls::sync([this, life, msg] {
+                if (life.expired()) return;
+                if (video_) {
+                    video_->hideLoading();
+                    video_->setCenterHintText("解析失败: " + msg);
+                }
+            });
         });
-    }, [this, lifetime, prompt](const std::string& msg, int) {
-        brls::sync([this, lifetime, prompt, msg] {
-            if (lifetime.expired()) return;
-            status_->setText("在线源解析失败: " + msg);
-            prompt();
-        });
-    });
+}
+
+void PlayerActivity::startPlayback(const std::string& url) {
+    const bool network =
+        url.rfind("http://", 0) == 0 || url.rfind("https://", 0) == 0;
+#if defined(__SWITCH__)
+    // mpv cannot resolve Clash fake-ip; download via our TLS/DNS stack.
+    if (network && url.find(".m3u8") == std::string::npos) {
+        downloadThenPlay(url);
+        return;
+    }
+#endif
+    if (!video_) return;
+    video_->showLoading();
+    video_->setUrl(url);
+    PLOG("player: tsvitch setUrl");
 }
 
 #if defined(__SWITCH__)
-// Always-on breadcrumb for the online path (PLAYER_TRACE needs debug).
-static void playerLog(const char* m) {
-#if defined(ANISWITCH_SWITCH_DEBUG)
-    aniswitchStartupLog(m);
-#else
-    (void)m;
-#endif
-}
-
 void PlayerActivity::downloadThenPlay(const std::string& url) {
-    status_->setText("在线下载中…");
-    {
-        char b[200];
-        snprintf(b, sizeof(b), "player: downloadThenPlay %s", url.c_str());
-        playerLog(b);
+    if (video_) {
+        video_->setCenterHintText("在线下载中…");
+        video_->showLoading();
     }
+    PLOG("player: downloadThenPlay");
     try {
-        playerLog("player: dl path");
         uint64_t h = 1469598103934665603ULL;
         for (unsigned char c : url) { h ^= c; h *= 1099511628211ULL; }
         const std::string out =
             fmt::format("sdmc:/switch/aniswitch/vc_{:016x}.mp4", h);
-        playerLog("player: dl prepare session");
         cpr::Session s;
         HTTP::prepareFetchSession(s, url);
         s.SetTimeout(cpr::Timeout{180000});
         s.SetConnectTimeout(cpr::ConnectTimeout{20000});
-        // v22: stream binary to disk — r.text is unreliable for video.
         std::ofstream file(out, std::ios::binary | std::ios::trunc);
         size_t written = 0;
         s.SetWriteCallback(cpr::WriteCallback{
-            [&file, &written](std::string data, intptr_t /*userdata*/) -> bool {
+            [&file, &written](std::string data, intptr_t) -> bool {
                 if (!file) return false;
                 file.write(data.data(), static_cast<std::streamsize>(data.size()));
                 written += data.size();
                 return true;
             }});
-        playerLog("player: dl get (stream)");
+        PLOG("player: dl get");
         auto r = s.Get();
         file.flush();
         file.close();
         std::error_code ec;
         const auto fsize = std::filesystem::exists(out, ec)
-                               ? std::filesystem::file_size(out, ec)
-                               : 0;
+                               ? std::filesystem::file_size(out, ec) : 0;
         {
-            char b[200];
-            snprintf(b, sizeof(b),
-                     "player: dl status=%ld err=%s stream=%zu file=%llu",
-                     r.status_code,
-                     r.error ? r.error.message.c_str() : "(none)",
-                     written,
-                     static_cast<unsigned long long>(fsize));
-            playerLog(b);
+            char b[180];
+            snprintf(b, sizeof(b), "player: dl status=%ld bytes=%zu",
+                     r.status_code, written);
+            PLOG(b);
         }
-        const bool ok = !r.error && r.status_code == 200 && fsize > 1024;
-        if (!ok) {
+        if (r.error || r.status_code != 200 || fsize < 1024) {
             if (!fallbackUrls_.empty()) {
                 const std::string next = fallbackUrls_.front();
                 fallbackUrls_.erase(fallbackUrls_.begin());
-                status_->setText("下载失败，切换备用源…");
-                start(next);
-            } else {
-                status_->setText(fmt::format("在线下载失败 [{}]", r.status_code));
+                startPlayback(next);
+            } else if (video_) {
+                video_->hideLoading();
+                video_->setCenterHintText(fmt::format("下载失败 [{}]", r.status_code));
             }
             return;
         }
-        playerLog("player: dl done, play");
-        status_->setText(fmt::format("在线源 {:.1f} MB 开始播放",
-                                     fsize / 1048576.0));
-        start(out);
+        PLOG("player: dl ok, play");
+        if (video_) video_->hideLoading();
+        startPlayback(out);
     } catch (const std::exception& e) {
-        char b[160];
-        snprintf(b, sizeof(b), "player: dl exception %s", e.what());
-        playerLog(b);
-        status_->setText(std::string("在线下载异常: ") + e.what());
+        if (video_) {
+            video_->hideLoading();
+            video_->setCenterHintText(std::string("下载异常: ") + e.what());
+        }
     }
+}
+#else
+void PlayerActivity::downloadThenPlay(const std::string& url) {
+    startPlayback(url);
 }
 #endif
 
-void PlayerActivity::start(const std::string& path) {
-    // sdmc:/switch/... is a local Switch path — strip the scheme so
-    // std::filesystem and the :// check don't treat it as unsupported.
-    std::string fsPath = path;
-    if (fsPath.rfind("sdmc:", 0) == 0) fsPath = fsPath.substr(5);
-    if (!fsPath.empty() && fsPath[0] != '/') fsPath = "/" + fsPath;
-
-    const bool network = path.rfind("http://", 0) == 0 || path.rfind("https://", 0) == 0;
-#if defined(__SWITCH__)
-    // v22: Switch network often sits behind Clash fake-ip (198.18.x).
-    // mpv cannot resolve that; download via our TLS/DNS stack then
-    // play the local cache file. This is still a network fetch.
-    if (network && !path.empty() && path.find(".m3u8") == std::string::npos) {
-        downloadThenPlay(path);
-        return;
-    }
-#endif
-    if (!network && (fsPath.find("://") != std::string::npos || !std::filesystem::is_regular_file(fsPath))) {
-        status_->setText("视频文件不存在: " + fsPath);
-        brls::Logger::error("Player: local file missing: {}", fsPath);
-        return;
-    }
-    const std::string playPath = network ? path : fsPath;
-    videoSource_ = playPath;
-    started_ = true;
-    lastCheckpoint_ = -1;
-    if (status_) {
-        status_->setText(network ? ("加载中… " + path) : ("播放中… " + fsPath));
-    }
-    auto& player = MPVCore::instance();
-    player.reset();
-    DanmakuCore::instance().reset();
-    player.setUrl(playPath);
-    if (!network) {
-        auto sidecar = std::filesystem::path(playPath).replace_extension(".xml");
-        std::error_code error;
-        auto size = std::filesystem::file_size(sidecar, error);
-        if (!error && size > 16 * 1024 * 1024) {
-            brls::Application::notify("弹幕 XML 超过 16MB，已跳过");
-            return;
-        }
-        std::ifstream file(sidecar, std::ios::binary);
-        if (file) {
-            std::string xml((std::istreambuf_iterator<char>(file)), {});
-            DanmakuRenderer::instance().loadHistorical(parseDandanXml(xml));
-        }
-    } else if (episodeId_ > 0) {
-        // Network source: pull danmaku from BOTH myani and dandanplay
-        // in parallel, so the timeline is more complete.  Both are
-        // best-effort: any failure logs at debug level and playback
-        // continues.
-        std::weak_ptr<int> lifetime = lifetime_;
-        auto& myani = MyaniClient::instance();
-        myani.fetchDanmaku(episodeId_,
-            [lifetime](std::vector<MyaniDanmaku> list) {
-                if (lifetime.expired() || list.empty()) return;
-                std::vector<ParsedDanmaku> converted;
-                converted.reserve(list.size());
-                for (const auto& m : list) converted.push_back(toParsed(m));
-                DanmakuRenderer::instance().loadHistorical(converted);
-                brls::Logger::info("myani: loaded {} danmaku for current episode", list.size());
-            },
-            [](const std::string& msg, int code) {
-                brls::Logger::debug("myani fetch failed [{}]: {}", code, msg);
-            });
-
-        // dandanplay: take the last path component as the file name
-        // and ask /api/v2/match to identify the corresponding anime
-        // + episode.  If matched, fetch /api/v2/comment/{id} for the
-        // historical danmaku timeline.  Both requests are async and
-        // their results feed into the same dedup-aware loader.
-        std::string fileName = path;
-        const auto slash = fileName.find_last_of("/\\");
-        if (slash != std::string::npos) fileName = fileName.substr(slash + 1);
-        if (!fileName.empty()) {
-            DandanplayClient::matchByFileName(fileName, 0, 0,
-                [lifetime](DandanMatchResult m) {
-                    if (lifetime.expired() || !m.matched || m.episodeId <= 0) return;
-                    DandanplayClient::getComments(m.episodeId, /*withRelated=*/true, /*chConvert=*/0, /*mode=*/"",
-                        [lifetime, epId = m.episodeId](std::vector<DandanComment> comments) {
-                            if (lifetime.expired() || comments.empty()) return;
-                            std::vector<ParsedDanmaku> parsed;
-                            parsed.reserve(comments.size());
-                            for (const auto& c : comments) {
-                                ParsedDanmaku p;
-                                p.time     = c.time;
-                                p.text     = c.text;
-                                p.mode     = c.mode;
-                                p.color    = c.color;
-                                p.fontSize = c.fontSize;
-                                parsed.push_back(p);
-                            }
-                            DanmakuRenderer::instance().loadHistorical(parsed);
-                            brls::Logger::info("dandanplay: loaded {} danmaku for dandanplay ep {}", comments.size(), epId);
-                        },
-                        [epId = m.episodeId](const std::string& msg, int code) {
-                            brls::Logger::debug("dandanplay getComments({}) failed [{}]: {}", epId, code, msg);
-                        });
-                },
-                [](const std::string& msg, int code) {
-                    brls::Logger::debug("dandanplay match failed [{}]: {}", code, msg);
-                });
-        }
-    }
-    status_->setText("正在加载视频");
-}
-
-void PlayerActivity::onPlayerEvent(MpvEventEnum event) {
-    auto& player = MPVCore::instance();
-    if (event == MpvEventEnum::MPV_LOADED && resumePositionMs_ > 0) {
-        player.seek(resumePositionMs_ / 1000);
-        resumePositionMs_ = 0;
-    }
-    if (event == MpvEventEnum::MPV_FILE_ERROR) {
-        const auto err = mpv_error_string(player.mpv_error_code);
-        if (!fallbackUrls_.empty()) {
-            const std::string next = fallbackUrls_.front();
-            fallbackUrls_.erase(fallbackUrls_.begin());
-            status_->setText(fmt::format("源失败({})，切换备用…", err));
-            brls::Logger::warning("Player: {} failed, try fallback {}", videoSource_, next);
-            start(next);
-            return;
-        }
-        status_->setText(fmt::format("播放失败: {}", err));
-    } else if (event == MpvEventEnum::UPDATE_PROGRESS || event == MpvEventEnum::MPV_LOADED) {
-        status_->setText(fmt::format("{:.0f} / {} 秒", player.getPlaybackTime(), player.duration));
-        auto second = static_cast<int64_t>(player.getPlaybackTime());
-        if (second / 10 != lastCheckpoint_) { lastCheckpoint_ = second / 10; checkpoint(); }
-    } else if (event == MpvEventEnum::LOADING_START) {
-        status_->setText("正在缓冲");
-    }
-}
-
-void PlayerActivity::checkpoint() {
-    if (!started_ || episodeId_ <= 0) return;
-    auto& player = MPVCore::instance();
-    SQLiteStore::ProgressEntry entry;
-    entry.episodeId = episodeId_; entry.subjectId = subjectId_;
-    entry.positionMs = static_cast<int64_t>(player.getPlaybackTime() * 1000);
-    entry.durationMs = player.duration * 1000;
-    SQLiteStore::instance().upsertProgress(entry);
-    SQLiteStore::HistoryEntry history;
-    history.episodeId = episodeId_; history.subjectId = subjectId_;
-    history.episodeName = videoSource_; history.positionMs = entry.positionMs; history.durationMs = entry.durationMs;
-    // v17.5: stamp watchedAt so the new history view can group
-    // entries by "今天 / 本周 / 更早".  time() is fine here — we
-    // only need a per-second resolution for human-readable
-    // bucketing, not for sorting (sort is by mtime in
-    // upsertHistoryLocked).
-    history.watchedAt = static_cast<int64_t>(time(nullptr));
-    SQLiteStore::instance().upsertHistory(history);
-}
-void PlayerActivity::onPause() { if (subscribed_) { checkpoint(); MPVCore::instance().pause(); } }
-}
+}  // namespace aniswitch

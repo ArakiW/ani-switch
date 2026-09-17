@@ -401,6 +401,12 @@ set(ANISWITCH_SOURCES
     src/player/danmaku_renderer.cpp
     src/player/subtitle_core.cpp
     src/player/video_view.cpp
+    # TsVitch player graft (GPL-3.0, compatible with AGPL-3.0)
+    src/player/tsvitch_video_view.cpp
+    src/player/tsvitch_video_profile.cpp
+    src/player/tsvitch_video_progress_slider.cpp
+    src/player/tsvitch_svg_image.cpp
+    src/player/tsvitch_hint_label.cpp
     # ui - activities
     src/ui/activity/main_activity.cpp
     src/ui/activity/subject_activity.cpp
