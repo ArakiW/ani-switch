@@ -264,9 +264,9 @@ void PlayerActivity::downloadThenPlay(const std::string& url) {
         // Cap first playable slice so Eden/Switch can show picture
         // without downloading a full 24-min episode first.
         size_t maxSegs = segs.size();
-        if (maxSegs > 40) {
-            maxSegs = 40;  // ~5–6 minutes of anime
-            PLOG("player: hls cap first 40 segments");
+        if (maxSegs > 15) {
+            maxSegs = 15;  // ~2 min — enough to prove picture in batch tests
+            PLOG("player: hls cap first 15 segments");
         }
         for (size_t i = 0; i < maxSegs; ++i) {
             if (video_ && (i % 4 == 0)) {

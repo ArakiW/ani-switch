@@ -200,25 +200,33 @@ void MainActivity::onContentAvailable() {
             while (!mode.empty() && (mode.back() == '\r' || mode.back() == '\n'))
                 mode.pop_back();
             aniswitchStartupLog("AUTOTOUR: armed");
-            brls::delay(3500, [mode]() {
+            // Optional second line for picker/online: "<epId> <subjectId>"
+            std::string line2;
+            std::getline(f, line2);
+            brls::delay(3500, [mode, line2]() {
                 char buf[120];
                 snprintf(buf, sizeof(buf), "AUTOTOUR: open %s", mode.c_str());
                 aniswitchStartupLog(buf);
+                auto parseIds = [&line2](int32_t& ep, int32_t& sid) {
+                    int e = 0, s = 0;
+                    if (sscanf(line2.c_str(), "%d %d", &e, &s) >= 1 && e > 0) {
+                        ep = e;
+                        if (s > 0) sid = s;
+                    }
+                };
                 if (mode == "collection") Intent::openMyCollection();
                 else if (mode == "history") Intent::openHistory();
                 else if (mode == "settings") Intent::openSettings();
                 else if (mode == "subject") Intent::openSubject(-1);
-                else if (mode == "online") {
-                    // APP 内真实资源: 秋之动漫(animeko-source) 上的
-                    // 《葬送的芙莉莲》 → Bangumi sid 400602 ep 1227087
-                    Intent::openSubject(400602);
-                    brls::delay(2000, []() {
-                        Intent::openSourcePicker(1227087, 400602,
-                                                 "葬送的芙莉莲 EP1", true);
-                    });
-                } else if (mode == "picker") {
-                    Intent::openSourcePicker(1227087, 400602,
-                                             "葬送的芙莉莲 EP1", true);
+                else if (mode == "online" || mode == "picker") {
+                    int32_t ep = 1227087, sid = 400602;
+                    parseIds(ep, sid);
+                    {
+                        char b2[100];
+                        snprintf(b2, sizeof(b2), "AUTOTOUR: picker ep=%d sid=%d", ep, sid);
+                        aniswitchStartupLog(b2);
+                    }
+                    Intent::openSourcePicker(ep, sid, "批量测试源", true);
                 } else if (mode == "player") {
                     Intent::openPlayer(-1, "",
                                        "sdmc:/switch/aniswitch/videos/test-local.mp4",
