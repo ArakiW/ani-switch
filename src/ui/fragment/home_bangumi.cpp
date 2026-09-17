@@ -4,6 +4,7 @@
 #include "ui/presenter/home_presenter.hpp"
 #include "ui/status_view.hpp"
 #include "ui/theme.hpp"
+#include "ui/demo_data.hpp"
 #include "net/http.hpp"
 #include "utils/activity_helper.hpp"
 #include "utils/image_loader.hpp"
@@ -131,8 +132,14 @@ void HomeBangumiFragment::onCalendar(std::vector<CalendarItem> calendar) {
     loading_ = false;
     list_->clearViews();
     if (calendar.empty()) {
-        status_->setEmpty("暂无数据\n" + HTTP::proxyHint());
-        return;
+        // v22 compose-next: empty schedule → demo week.
+        auto* banner = new brls::Label();
+        banner->setText(demo::kBanner);
+        banner->setFontSize(theme::kTypeCaption);
+        banner->setTextColor(theme::kDarkTextMuted);
+        banner->setMarginBottom(8);
+        list_->addView(banner);
+        calendar = demo::calendar();
     }
     status_->setVisibility(brls::Visibility::GONE);
     list_->setVisibility(brls::Visibility::VISIBLE);

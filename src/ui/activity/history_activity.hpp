@@ -20,7 +20,7 @@ private:
     brls::Box*   list_    = nullptr;
     brls::Label* summary_ = nullptr;   // v17.5: top summary line
     brls::Button* clearBtn_ = nullptr; // v17.5: "清空所有" button
-    void render(const std::vector<SQLiteStore::HistoryEntry>& v);
+    void render(std::vector<SQLiteStore::HistoryEntry> v);
 };
 
 }  // namespace aniswitch

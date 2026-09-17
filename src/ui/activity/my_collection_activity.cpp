@@ -4,6 +4,7 @@
 #include "ui/theme.hpp"
 #include "ui/poster_card.hpp"
 #include "ui/hud.hpp"
+#include "ui/demo_data.hpp"
 #include "utils/activity_helper.hpp"
 #include "utils/number_helper.hpp"
 #include "utils/config_helper.hpp"
@@ -84,6 +85,8 @@ void MyCollectionActivity::onContentAvailable() {
         presenter_.refreshFromRemote();
     } else {
         presenter_.refreshFromLocal();
+        // v22 compose-next: not logged in → still show a filled grid.
+        render(demo::collection());
     }
 }
 
@@ -135,11 +138,20 @@ void MyCollectionActivity::render(const std::vector<SQLiteStore::CollectionEntry
     }
 
     if (filtered.empty()) {
-        auto* empty = new brls::Label();
-        empty->setText(filterType_ < 0 ? "(无收藏)" : "(该状态下没有条目)");
-        empty->setFontSize(theme::kTypeBody);
-        list_->addView(empty);
-        return;
+        // v22 compose-next: empty → demo grid under banner.
+        auto* banner = new brls::Label();
+        banner->setText(demo::kBanner);
+        banner->setFontSize(theme::kTypeCaption);
+        banner->setTextColor(theme::kDarkTextMuted);
+        banner->setMarginBottom(8);
+        list_->addView(banner);
+        static const auto kDemo = demo::collection();
+        for (const auto& e : kDemo) {
+            if (filterType_ < 0 || e.type == filterType_) filtered.push_back(&e);
+        }
+        if (filtered.empty()) {
+            for (const auto& e : kDemo) filtered.push_back(&e);
+        }
     }
 
     // v22 §5.4: 6-col poster grid.

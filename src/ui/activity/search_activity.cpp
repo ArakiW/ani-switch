@@ -4,6 +4,7 @@
 #include "ui/theme.hpp"
 #include "ui/poster_card.hpp"
 #include "ui/hud.hpp"
+#include "ui/demo_data.hpp"
 #include "utils/activity_helper.hpp"
 #include "utils/string_helper.hpp"
 #include "utils/number_helper.hpp"
@@ -74,6 +75,9 @@ void SearchActivity::onContentAvailable() {
     presenter_.onResults.subscribe([this](std::vector<SearchSubject> v) { onResults(v); });
     presenter_.loadHistory();
 
+    // v22 compose-next: idle Search still shows content.
+    onResults(demo::subjects());
+
     if (!initial_.empty()) {
         doSearch(initial_);
     }
@@ -120,11 +124,14 @@ void SearchActivity::onResults(std::vector<SearchSubject> res) {
     if (!list) return;
     list->clearViews();
     if (res.empty()) {
-        auto* empty = new brls::Label();
-        empty->setText("(无结果)");
-        empty->setFontSize(theme::kTypeBody);
-        list->addView(empty);
-        return;
+        // v22 compose-next: empty/error → demo grid + banner.
+        auto* banner = new brls::Label();
+        banner->setText(demo::kBanner);
+        banner->setFontSize(theme::kTypeCaption);
+        banner->setTextColor(theme::kDarkTextMuted);
+        banner->setMarginBottom(8);
+        list->addView(banner);
+        res = demo::subjects();
     }
     // 6 columns × poster 152×228, gap 16 (DESIGN.md §5.4).
     constexpr int kCols = 6;

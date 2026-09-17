@@ -16,6 +16,7 @@
 #include "ui/activity/history_activity.hpp"
 #include "ui/theme.hpp"
 #include "ui/hud.hpp"
+#include "ui/demo_data.hpp"
 #include "utils/activity_helper.hpp"
 #include "utils/string_helper.hpp"
 #include <borealis/core/application.hpp>
@@ -146,13 +147,13 @@ void HistoryActivity::onContentAvailable() {
     presenter_.refresh();
 }
 
-void HistoryActivity::render(const std::vector<SQLiteStore::HistoryEntry>& v) {
+void HistoryActivity::render(std::vector<SQLiteStore::HistoryEntry> v) {
     if (!list_) return;
     list_->clearViews();
 
     if (summary_) {
         if (v.empty()) {
-            summary_->setText("还没有任何观看记录");
+            summary_->setText("演示：还没有任何观看记录");
         } else {
             int64_t totalMs = 0;
             for (const auto& e : v) totalMs += e.durationMs;
@@ -163,11 +164,14 @@ void HistoryActivity::render(const std::vector<SQLiteStore::HistoryEntry>& v) {
     }
 
     if (v.empty()) {
-        auto* empty = new brls::Label();
-        empty->setText("(无)");
-        empty->setFontSize(theme::kTypeBody);
-        list_->addView(empty);
-        return;
+        // v22 compose-next: empty history → demo rows.
+        auto* banner = new brls::Label();
+        banner->setText(demo::kBanner);
+        banner->setFontSize(theme::kTypeCaption);
+        banner->setTextColor(theme::kDarkTextMuted);
+        banner->setMarginBottom(8);
+        list_->addView(banner);
+        v = demo::history();
     }
 
     int64_t now = static_cast<int64_t>(time(nullptr));

@@ -2,6 +2,7 @@
 #include "ui/activity/subject_activity.hpp"
 #include "ui/theme.hpp"
 #include "ui/hud.hpp"
+#include "ui/demo_data.hpp"
 #include "utils/activity_helper.hpp"
 #include "utils/image_loader.hpp"
 #include "net/bgm_client.hpp"
@@ -115,7 +116,21 @@ void SubjectActivity::onContentAvailable() {
     presenter_.onRating.subscribe([this](SubjectRating r) { onRating(std::move(r)); });
     presenter_.onMyCollection.subscribe([this](UserCollection c) { onMyCollection(std::move(c)); });
     presenter_.setSubjectId(subjectId_);
-    presenter_.refresh();
+    if (subjectId_ < 0) {
+        // v22 compose-next: demo sentinel ids skip the network.
+        std::string name = "演示条目";
+        for (const auto& s : demo::subjects()) {
+            if (s.id == subjectId_) {
+                name = s.nameCN.empty() ? s.name : s.nameCN;
+                break;
+            }
+        }
+        onSubject(demo::makeDetail(subjectId_, name));
+        onEpisodes(demo::episodesFor(subjectId_));
+        meta_->setText(demo::kBanner);
+    } else {
+        presenter_.refresh();
+    }
 }
 
 void SubjectActivity::onSubject(Subject s) {
