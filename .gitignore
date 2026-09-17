@@ -1,0 +1,75 @@
+# Build artifacts
+build/
+cmake-build-*/
+out/
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.dylib
+*.exe
+*.nro
+*.nacp
+*.nsp
+*.elf
+
+# IDE
+.vscode/
+.idea/
+.vs/
+*.swp
+*~
+.cache/
+compile_commands.json
+
+# Generated
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+_deps
+build.ninja
+.ninja_log
+.ninja_deps
+
+# User config
+config/
+ani-switch.cfg
+ani-switch.json
+config.json
+*.log
+*.bak
+
+# Submodule build outputs (keep the submodule, ignore the build)
+third_party/*/build/
+third_party/*/cmake-build-*/
+third_party/*/.DS_Store
+third_party/*/Testing/
+third_party/*/_deps/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local downloads (averne ffmpeg/mpv deb packages)
+*.pkg.tar.zst
+*.pkg.tar.xz
+*.deb
+
+# v22 compose-next: keep the base commit light
+cmake-build-*/
+dist/
+release/
+build_logs/
+.pkgs/
+aniswitch/
+*.zip
+*.nro
+tools/ani-source/
+tools/ani-source-py/
+tools/ani-extract/

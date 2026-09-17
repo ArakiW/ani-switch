@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" font-family="Noto Sans SC, Source Han Sans SC, sans-serif">
+  <!-- Subject Detail · Switch 720p -->
+  <defs>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5B3A8C"/><stop offset="100%" stop-color="#12101A"/>
+    </linearGradient>
+    <linearGradient id="coverArt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6B4FA0"/><stop offset="100%" stop-color="#1E1830"/>
+    </linearGradient>
+    <linearGradient id="fadeBottom" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0B0910" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#0B0910" stop-opacity="0.95"/>
+    </linearGradient>
+    <filter id="glow">
+      <feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#A78BFA" flood-opacity="0.3"/>
+    </filter>
+    <linearGradient id="ep" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2A2440"/><stop offset="100%" stop-color="#1A1628"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="720" fill="#0B0910"/>
+
+  <!-- Hero band -->
+  <rect x="0" y="0" width="1280" height="360" fill="url(#hero)" opacity="0.55"/>
+  <rect x="0" y="200" width="1280" height="160" fill="url(#fadeBottom)"/>
+
+  <!-- Cover -->
+  <g filter="url(#glow)">
+    <rect x="48" y="88" width="200" height="300" rx="14" fill="url(#coverArt)" stroke="#A78BFA" stroke-width="2"/>
+  </g>
+  <text x="148" y="240" font-size="14" fill="#B9B9C3" text-anchor="middle">封面</text>
+
+  <!-- Meta block -->
+  <text x="280" y="120" font-size="40" font-weight="700" fill="#F5F5F8">葬送的芙莉莲</text>
+  <text x="280" y="152" font-size="18" fill="#B9B9C3">Sousou no Frieren</text>
+
+  <!-- Rating -->
+  <text x="280" y="196" font-size="28" font-weight="700" fill="#FFC850">★ 8.7</text>
+  <text x="360" y="196" font-size="16" fill="#828291">(12,480 人)</text>
+
+  <!-- Meta chips -->
+  <rect x="280" y="216" width="72" height="32" rx="16" fill="#4F378B" opacity="0.35"/>
+  <text x="316" y="237" font-size="14" fill="#F5F5F8" text-anchor="middle">TV</text>
+  <rect x="360" y="216" width="88" height="32" rx="16" fill="#4F378B" opacity="0.35"/>
+  <text x="404" y="237" font-size="14" fill="#F5F5F8" text-anchor="middle">28 集</text>
+  <rect x="456" y="216" width="96" height="32" rx="16" fill="#4F378B" opacity="0.35"/>
+  <text x="504" y="237" font-size="14" fill="#F5F5F8" text-anchor="middle">2023-09</text>
+  <rect x="560" y="216" width="112" height="32" rx="16" fill="#282436"/>
+  <text x="616" y="237" font-size="14" fill="#B9B9C3" text-anchor="middle">奇幻 · 冒险</text>
+
+  <!-- Summary -->
+  <text x="280" y="280" font-size="22" fill="#F5F5F8">简介</text>
+  <text x="280" y="312" font-size="18" fill="#B9B9C3">魔王已被打倒，勇者一行人踏上归途。精灵魔法使芙莉莲</text>
+  <text x="280" y="340" font-size="18" fill="#B9B9C3">在千年后重新审视与同伴们的旅程……</text>
+
+  <!-- CTA buttons -->
+  <rect x="280" y="380" width="200" height="56" rx="12" fill="#4F378B" stroke="#A78BFA" stroke-width="2"/>
+  <text x="380" y="415" font-size="22" font-weight="600" fill="#F5F5F8" text-anchor="middle">开始观看</text>
+
+  <rect x="496" y="380" width="140" height="56" rx="12" fill="#1F1B2B" stroke="#FFFFFF" stroke-opacity="0.15"/>
+  <text x="566" y="415" font-size="20" fill="#F5F5F8" text-anchor="middle">收藏</text>
+
+  <rect x="652" y="380" width="140" height="56" rx="12" fill="#1F1B2B" stroke="#FFFFFF" stroke-opacity="0.15"/>
+  <text x="722" y="415" font-size="20" fill="#F5F5F8" text-anchor="middle">稍后再看</text>
+
+  <!-- Episodes header -->
+  <text x="48" y="492" font-size="28" font-weight="600" fill="#F5F5F8">剧集</text>
+  <text x="130" y="492" font-size="16" fill="#828291">L/R 翻页 · A 播放</text>
+
+  <!-- Episode grid 8 cols -->
+  <!-- Row focus on ep 1 -->
+  <g filter="url(#glow)">
+    <rect x="48" y="512" width="136" height="100" rx="10" fill="url(#ep)" stroke="#A78BFA" stroke-width="2"/>
+  </g>
+  <text x="64" y="548" font-size="16" fill="#828291">EP 01</text>
+  <text x="64" y="576" font-size="18" font-weight="600" fill="#F5F5F8">旅程的结束</text>
+
+  <rect x="196" y="516" width="132" height="96" rx="10" fill="#1F1B2B"/>
+  <text x="212" y="552" font-size="14" fill="#828291">EP 02</text>
+  <text x="212" y="578" font-size="16" fill="#B9B9C3">北方诸国</text>
+
+  <rect x="340" y="516" width="132" height="96" rx="10" fill="#1F1B2B"/>
+  <text x="356" y="552" font-size="14" fill="#828291">EP 03</text>
+  <text x="356" y="578" font-size="16" fill="#B9B9C3">杀人魔法</text>
+
+  <rect x="484" y="516" width="132" height="96" rx="10" fill="#1F1B2B"/>
+  <text x="500" y="552" font-size="14" fill="#828291">EP 04</text>
+  <text x="500" y="578" font-size="16" fill="#B9B9C3">魂之眠处</text>
+
+  <rect x="628" y="516" width="132" height="96" rx="10" fill="#1F1B2B"/>
+  <text x="644" y="552" font-size="14" fill="#828291">EP 05</text>
+  <text x="644" y="578" font-size="16" fill="#B9B9C3">幻影鬼</text>
+
+  <rect x="772" y="516" width="132" height="96" rx="10" fill="#1F1B2B"/>
+  <text x="788" y="552" font-size="14" fill="#828291">EP 06</text>
+  <text x="788" y="578" font-size="16" fill="#B9B9C3">村庄的英雄</text>
+
+  <rect x="916" y="516" width="132" height="96" rx="10" fill="#1F1B2B"/>
+  <text x="932" y="552" font-size="14" fill="#828291">EP 07</text>
+  <text x="932" y="578" font-size="16" fill="#B9B9C3">新旅程</text>
+
+  <rect x="1060" y="516" width="132" height="96" rx="10" fill="#1F1B2B" opacity="0.5"/>
+  <text x="1076" y="552" font-size="14" fill="#828291">EP 08</text>
+  <text x="1076" y="578" font-size="16" fill="#828291">…</text>
+
+  <!-- HUD -->
+  <rect x="0" y="664" width="1280" height="56" fill="#0B0910" opacity="0.92"/>
+  <rect x="0" y="664" width="1280" height="1" fill="#FFFFFF" opacity="0.08"/>
+  <circle cx="56" cy="692" r="12" fill="#4F378B"/>
+  <text x="56" y="697" font-size="12" font-weight="700" fill="#F5F5F8" text-anchor="middle">A</text>
+  <text x="76" y="697" font-size="16" fill="#B9B9C3">确认</text>
+  <circle cx="148" cy="692" r="12" fill="#282436"/>
+  <text x="148" y="697" font-size="12" font-weight="700" fill="#F5F5F8" text-anchor="middle">B</text>
+  <text x="168" y="697" font-size="16" fill="#B9B9C3">返回</text>
+  <circle cx="240" cy="692" r="12" fill="#282436"/>
+  <text x="240" y="697" font-size="12" font-weight="700" fill="#F5F5F8" text-anchor="middle">X</text>
+  <text x="260" y="697" font-size="16" fill="#B9B9C3">收藏</text>
+  <circle cx="340" cy="692" r="12" fill="#282436"/>
+  <text x="340" y="697" font-size="12" font-weight="700" fill="#F5F5F8" text-anchor="middle">Y</text>
+  <text x="360" y="697" font-size="16" fill="#B9B9C3">简介全文</text>
+  <text x="1180" y="697" font-size="16" fill="#B9B9C3" text-anchor="end">+ 菜单</text>
+</svg>

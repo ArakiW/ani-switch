@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" font-family="Noto Sans SC, Source Han Sans SC, sans-serif">
+  <!-- Component sheet for Figma import -->
+  <rect width="1280" height="900" fill="#0B0910"/>
+  <text x="48" y="48" font-size="28" font-weight="700" fill="#F5F5F8">ani-switch · Design Tokens &amp; Components</text>
+  <text x="48" y="78" font-size="16" fill="#828291">1280×720 · 10-foot · Dark default</text>
+
+  <!-- Palette -->
+  <text x="48" y="130" font-size="20" font-weight="600" fill="#F5F5F8">Palette</text>
+  <rect x="48" y="148" width="100" height="64" rx="10" fill="#0B0910" stroke="#FFFFFF" stroke-opacity="0.15"/>
+  <text x="98" y="230" font-size="12" fill="#B9B9C3" text-anchor="middle">bg #0B0910</text>
+  <rect x="160" y="148" width="100" height="64" rx="10" fill="#16131F"/>
+  <text x="210" y="230" font-size="12" fill="#B9B9C3" text-anchor="middle">surface</text>
+  <rect x="272" y="148" width="100" height="64" rx="10" fill="#1F1B2B"/>
+  <text x="322" y="230" font-size="12" fill="#B9B9C3" text-anchor="middle">surface-2</text>
+  <rect x="384" y="148" width="100" height="64" rx="10" fill="#282436"/>
+  <text x="434" y="230" font-size="12" fill="#B9B9C3" text-anchor="middle">card</text>
+  <rect x="496" y="148" width="100" height="64" rx="10" fill="#4F378B"/>
+  <text x="546" y="230" font-size="12" fill="#B9B9C3" text-anchor="middle">accent</text>
+  <rect x="608" y="148" width="100" height="64" rx="10" fill="#A78BFA"/>
+  <text x="658" y="230" font-size="12" fill="#B9B9C3" text-anchor="middle">focus</text>
+  <rect x="720" y="148" width="100" height="64" rx="10" fill="#FFC850"/>
+  <text x="770" y="230" font-size="12" fill="#B9B9C3" text-anchor="middle">rating</text>
+  <rect x="832" y="148" width="100" height="64" rx="10" fill="#FF6978"/>
+  <text x="882" y="230" font-size="12" fill="#B9B9C3" text-anchor="middle">danger</text>
+
+  <!-- Type scale -->
+  <text x="48" y="280" font-size="20" font-weight="600" fill="#F5F5F8">Type scale</text>
+  <text x="48" y="320" font-size="40" font-weight="700" fill="#F5F5F8">Display 40</text>
+  <text x="280" y="320" font-size="28" font-weight="600" fill="#F5F5F8">Title 28</text>
+  <text x="460" y="320" font-size="22" fill="#F5F5F8">Body 22</text>
+  <text x="600" y="320" font-size="18" fill="#B9B9C3">Meta 18</text>
+  <text x="720" y="320" font-size="16" fill="#828291">Caption 16</text>
+
+  <!-- Poster cards -->
+  <text x="48" y="380" font-size="20" font-weight="600" fill="#F5F5F8">Poster card</text>
+
+  <!-- Unfocused -->
+  <rect x="48" y="400" width="168" height="252" rx="12" fill="#282436"/>
+  <text x="48" y="670" font-size="14" fill="#828291">Unfocused 168×252</text>
+
+  <!-- Focused -->
+  <g>
+    <rect x="248" y="392" width="181" height="272" rx="13" fill="#5B3A8C" stroke="#A78BFA" stroke-width="3"/>
+    <!-- glow approx -->
+    <rect x="244" y="388" width="189" height="280" rx="16" fill="none" stroke="#A78BFA" stroke-opacity="0.25" stroke-width="8"/>
+  </g>
+  <text x="248" y="690" font-size="14" fill="#828291">Focused ×1.08 + ring</text>
+
+  <!-- List row unfocused / focused -->
+  <text x="480" y="380" font-size="20" font-weight="600" fill="#F5F5F8">List row</text>
+  <rect x="480" y="400" width="360" height="96" rx="12" fill="#1F1B2B"/>
+  <rect x="496" y="412" width="56" height="72" rx="8" fill="#282436"/>
+  <text x="568" y="448" font-size="22" fill="#F5F5F8">标题</text>
+  <text x="568" y="476" font-size="18" fill="#828291">副标题 · 8.2</text>
+
+  <rect x="480" y="512" width="360" height="96" rx="12" fill="#282436"/>
+  <rect x="480" y="512" width="4" height="96" fill="#A78BFA"/>
+  <rect x="496" y="524" width="56" height="72" rx="8" fill="#4F378B"/>
+  <text x="568" y="560" font-size="22" fill="#F5F5F8">焦点行</text>
+  <text x="568" y="588" font-size="18" fill="#B9B9C3">左条 + 底色</text>
+
+  <!-- Buttons -->
+  <text x="880" y="380" font-size="20" font-weight="600" fill="#F5F5F8">Buttons</text>
+  <rect x="880" y="400" width="160" height="56" rx="12" fill="#4F378B" stroke="#A78BFA" stroke-width="2"/>
+  <text x="960" y="436" font-size="20" font-weight="600" fill="#F5F5F8" text-anchor="middle">开始观看</text>
+  <rect x="880" y="472" width="120" height="56" rx="12" fill="#1F1B2B" stroke="#FFFFFF" stroke-opacity="0.15"/>
+  <text x="940" y="508" font-size="18" fill="#F5F5F8" text-anchor="middle">次按钮</text>
+  <rect x="1016" y="472" width="88" height="36" rx="18" fill="#4F378B" opacity="0.35"/>
+  <text x="1060" y="496" font-size="14" fill="#F5F5F8" text-anchor="middle">Tag</text>
+
+  <!-- HUD chips -->
+  <text x="48" y="740" font-size="20" font-weight="600" fill="#F5F5F8">HUD chips</text>
+  <circle cx="60" cy="790" r="14" fill="#4F378B"/>
+  <text x="60" y="796" font-size="14" font-weight="700" fill="#F5F5F8" text-anchor="middle">A</text>
+  <text x="82" y="796" font-size="18" fill="#B9B9C3">确认</text>
+  <circle cx="150" cy="790" r="14" fill="#282436"/>
+  <text x="150" y="796" font-size="14" font-weight="700" fill="#F5F5F8" text-anchor="middle">B</text>
+  <text x="172" y="796" font-size="18" fill="#B9B9C3">返回</text>
+  <circle cx="240" cy="790" r="14" fill="#282436"/>
+  <text x="240" y="796" font-size="14" font-weight="700" fill="#F5F5F8" text-anchor="middle">X</text>
+  <text x="262" y="796" font-size="18" fill="#B9B9C3">收藏</text>
+  <circle cx="340" cy="790" r="14" fill="#282436"/>
+  <text x="340" y="796" font-size="14" font-weight="700" fill="#F5F5F8" text-anchor="middle">Y</text>
+  <text x="362" y="796" font-size="18" fill="#B9B9C3">详情</text>
+
+  <!-- Grid specs -->
+  <text x="700" y="740" font-size="20" font-weight="600" fill="#F5F5F8">Layout</text>
+  <text x="700" y="770" font-size="16" fill="#B9B9C3">safe margin 48/36 · top bar 64 · HUD 56</text>
+  <text x="700" y="796" font-size="16" fill="#B9B9C3">poster 168×252 · gap 16 · focus 1.08 / 180ms</text>
+  <text x="700" y="822" font-size="16" fill="#B9B9C3">rail title 28 · body min 22 · row h 96</text>
+</svg>

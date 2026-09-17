@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" font-family="Noto Sans SC, Source Han Sans SC, sans-serif">
+  <!-- Player OSD · Switch 720p -->
+  <defs>
+    <linearGradient id="osd" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0B0910" stop-opacity="0"/>
+      <stop offset="40%" stop-color="#0B0910" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#0B0910" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="vid" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a2030"/><stop offset="50%" stop-color="#2a3048"/><stop offset="100%" stop-color="#151820"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Video frame -->
+  <rect width="1280" height="720" fill="url(#vid)"/>
+  <text x="640" y="300" font-size="20" fill="#828291" text-anchor="middle">VideoView (Tegra NVDEC)</text>
+  <text x="640" y="330" font-size="16" fill="#555566" text-anchor="middle">EP 01 · 旅程的结束 · 葬送的芙莉莲</text>
+
+  <!-- Top OSD (brief) -->
+  <rect x="0" y="0" width="1280" height="80" fill="#0B0910" opacity="0.55"/>
+  <text x="48" y="48" font-size="22" font-weight="600" fill="#F5F5F8">葬送的芙莉莲</text>
+  <text x="48" y="72" font-size="16" fill="#B9B9C3">EP01 旅程的结束</text>
+  <text x="1180" y="48" font-size="18" fill="#B9B9C3" text-anchor="end">弹幕: 开</text>
+
+  <!-- Bottom OSD -->
+  <rect x="0" y="480" width="1280" height="240" fill="url(#osd)"/>
+
+  <!-- Time -->
+  <text x="48" y="560" font-size="22" fill="#F5F5F8">12:34</text>
+  <text x="1232" y="560" font-size="22" fill="#B9B9C3" text-anchor="end">24:01</text>
+
+  <!-- Progress track -->
+  <rect x="48" y="584" width="1184" height="6" rx="3" fill="#FFFFFF" opacity="0.15"/>
+  <rect x="48" y="584" width="610" height="6" rx="3" fill="#A78BFA"/>
+  <circle cx="658" cy="587" r="12" fill="#A78BFA"/>
+  <circle cx="658" cy="587" r="5" fill="#F5F5F8"/>
+
+  <!-- Buffered -->
+  <rect x="658" y="584" width="200" height="6" rx="3" fill="#FFFFFF" opacity="0.08"/>
+
+  <!-- Control buttons row -->
+  <!-- Prev -->
+  <rect x="48" y="620" width="56" height="48" rx="12" fill="#1F1B2B" opacity="0.9"/>
+  <text x="76" y="650" font-size="20" fill="#F5F5F8" text-anchor="middle">⏮</text>
+
+  <!-- Play focused -->
+  <rect x="120" y="612" width="72" height="56" rx="14" fill="#4F378B" stroke="#A78BFA" stroke-width="2"/>
+  <text x="156" y="648" font-size="24" fill="#F5F5F8" text-anchor="middle">⏸</text>
+
+  <!-- Next -->
+  <rect x="208" y="620" width="56" height="48" rx="12" fill="#1F1B2B" opacity="0.9"/>
+  <text x="236" y="650" font-size="20" fill="#F5F5F8" text-anchor="middle">⏭</text>
+
+  <!-- Episode -->
+  <rect x="280" y="620" width="120" height="48" rx="12" fill="#1F1B2B" opacity="0.9"/>
+  <text x="340" y="650" font-size="16" fill="#B9B9C3" text-anchor="middle">选集 L/R</text>
+
+  <!-- Danmaku -->
+  <rect x="900" y="620" width="120" height="48" rx="12" fill="#1F1B2B" opacity="0.9"/>
+  <text x="960" y="650" font-size="16" fill="#B9B9C3" text-anchor="middle">弹幕 X</text>
+
+  <!-- Speed -->
+  <rect x="1036" y="620" width="100" height="48" rx="12" fill="#1F1B2B" opacity="0.9"/>
+  <text x="1086" y="650" font-size="16" fill="#B9B9C3" text-anchor="middle">1.0×</text>
+
+  <!-- Fullscreen/exit hint -->
+  <text x="1180" y="650" font-size="16" fill="#828291" text-anchor="end">B 退出</text>
+
+  <!-- Idle hint: OSD auto-hide -->
+  <text x="48" y="40" font-size="14" fill="#828291" opacity="0">hidden when idle 3s</text>
+</svg>

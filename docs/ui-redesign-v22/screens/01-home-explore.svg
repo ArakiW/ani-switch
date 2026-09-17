@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" font-family="Noto Sans SC, Source Han Sans SC, sans-serif">
+  <!-- Home · Explore rails · Switch 720p -->
+  <defs>
+    <linearGradient id="posterFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="55%" stop-color="#0B0910" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#0B0910" stop-opacity="0.92"/>
+    </linearGradient>
+    <filter id="focusGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#A78BFA" flood-opacity="0.35"/>
+    </filter>
+    <linearGradient id="art1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5B3A8C"/><stop offset="100%" stop-color="#1A2744"/>
+    </linearGradient>
+    <linearGradient id="art2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2D4A6F"/><stop offset="100%" stop-color="#1A1A2E"/>
+    </linearGradient>
+    <linearGradient id="art3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6B3A4A"/><stop offset="100%" stop-color="#241820"/>
+    </linearGradient>
+    <linearGradient id="art4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2F5D50"/><stop offset="100%" stop-color="#15201C"/>
+    </linearGradient>
+    <linearGradient id="art5" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4A3D72"/><stop offset="100%" stop-color="#1C1830"/>
+    </linearGradient>
+  </defs>
+
+  <!-- BG -->
+  <rect width="1280" height="720" fill="#0B0910"/>
+
+  <!-- Top bar -->
+  <rect x="0" y="0" width="1280" height="64" fill="#16131F"/>
+  <rect x="0" y="64" width="1280" height="1" fill="#FFFFFF" opacity="0.08"/>
+  <text x="48" y="40" font-size="24" font-weight="700" fill="#A78BFA">ani</text>
+  <text x="86" y="40" font-size="24" font-weight="700" fill="#F5F5F8">-switch</text>
+
+  <!-- Tabs -->
+  <rect x="200" y="12" width="88" height="40" rx="20" fill="#4F378B" opacity="0.35"/>
+  <text x="244" y="38" font-size="18" font-weight="600" fill="#F5F5F8" text-anchor="middle">探索</text>
+  <rect x="240" y="56" width="48" height="3" rx="1.5" fill="#A78BFA"/>
+  <text x="320" y="38" font-size="18" fill="#B9B9C3">每日放送</text>
+  <text x="430" y="38" font-size="18" fill="#B9B9C3">推荐</text>
+
+  <!-- Right actions -->
+  <rect x="1040" y="16" width="100" height="36" rx="18" fill="#1F1B2B"/>
+  <circle cx="1060" cy="34" r="8" fill="none" stroke="#B9B9C3" stroke-width="2"/>
+  <line x1="1066" y1="40" x2="1072" y2="46" stroke="#B9B9C3" stroke-width="2"/>
+  <text x="1082" y="40" font-size="16" fill="#B9B9C3">搜索</text>
+  <circle cx="1180" cy="32" r="16" fill="#4F378B"/>
+  <text x="1180" y="37" font-size="14" font-weight="600" fill="#F5F5F8" text-anchor="middle">L</text>
+
+  <!-- Rail 1 -->
+  <text x="48" y="108" font-size="28" font-weight="600" fill="#F5F5F8">本周热门</text>
+  <text x="168" y="108" font-size="16" fill="#828291">Ani · trends</text>
+
+  <!-- Posters row 1: y=128, h=252, w=168, gap=16 -->
+  <!-- Card 1 FOCUSED -->
+  <g filter="url(#focusGlow)">
+    <rect x="48" y="128" width="168" height="252" rx="12" fill="url(#art1)" stroke="#A78BFA" stroke-width="3"/>
+  </g>
+  <rect x="48" y="128" width="168" height="252" rx="12" fill="url(#posterFade)"/>
+  <rect x="168" y="140" width="36" height="22" rx="6" fill="#0B0910" opacity="0.85"/>
+  <text x="186" y="155" font-size="12" font-weight="600" fill="#FFC850" text-anchor="middle">8.7</text>
+  <text x="60" y="348" font-size="18" font-weight="600" fill="#F5F5F8">葬送的芙莉莲</text>
+  <text x="60" y="368" font-size="14" fill="#B9B9C3">TV · 28集</text>
+
+  <!-- Card 2 -->
+  <rect x="232" y="132" width="160" height="244" rx="12" fill="url(#art2)"/>
+  <rect x="232" y="132" width="160" height="244" rx="12" fill="url(#posterFade)"/>
+  <text x="244" y="348" font-size="16" fill="#F5F5F8">迷宫饭</text>
+  <text x="244" y="366" font-size="13" fill="#B9B9C3">8.4</text>
+
+  <!-- Card 3 -->
+  <rect x="408" y="132" width="160" height="244" rx="12" fill="url(#art3)"/>
+  <rect x="408" y="132" width="160" height="244" rx="12" fill="url(#posterFade)"/>
+  <text x="420" y="348" font-size="16" fill="#F5F5F8">药屋少女</text>
+  <text x="420" y="366" font-size="13" fill="#B9B9C3">8.2</text>
+
+  <!-- Card 4 -->
+  <rect x="584" y="132" width="160" height="244" rx="12" fill="url(#art4)"/>
+  <rect x="584" y="132" width="160" height="244" rx="12" fill="url(#posterFade)"/>
+  <text x="596" y="348" font-size="16" fill="#F5F5F8">孤独摇滚！</text>
+  <text x="596" y="366" font-size="13" fill="#B9B9C3">8.5</text>
+
+  <!-- Card 5 -->
+  <rect x="760" y="132" width="160" height="244" rx="12" fill="url(#art5)"/>
+  <rect x="760" y="132" width="160" height="244" rx="12" fill="url(#posterFade)"/>
+  <text x="772" y="348" font-size="16" fill="#F5F5F8">我推的孩子</text>
+  <text x="772" y="366" font-size="13" fill="#B9B9C3">8.1</text>
+
+  <!-- Card 6 partial -->
+  <rect x="936" y="132" width="160" height="244" rx="12" fill="#282436"/>
+  <text x="948" y="348" font-size="16" fill="#B9B9C3">咒术回战</text>
+
+  <!-- Rail 2 header -->
+  <text x="48" y="428" font-size="28" font-weight="600" fill="#F5F5F8">高分完结</text>
+
+  <!-- Row 2 cards (clipped visually by HUD) -->
+  <rect x="48" y="448" width="168" height="160" rx="12" fill="url(#art2)" opacity="0.9"/>
+  <rect x="232" y="448" width="160" height="160" rx="12" fill="url(#art4)" opacity="0.85"/>
+  <rect x="408" y="448" width="160" height="160" rx="12" fill="url(#art1)" opacity="0.8"/>
+  <rect x="584" y="448" width="160" height="160" rx="12" fill="url(#art3)" opacity="0.75"/>
+  <rect x="760" y="448" width="160" height="160" rx="12" fill="url(#art5)" opacity="0.7"/>
+
+  <!-- Bottom HUD -->
+  <rect x="0" y="664" width="1280" height="56" fill="#0B0910" opacity="0.92"/>
+  <rect x="0" y="664" width="1280" height="1" fill="#FFFFFF" opacity="0.08"/>
+
+  <!-- A 确认 -->
+  <circle cx="56" cy="692" r="12" fill="#4F378B"/>
+  <text x="56" y="697" font-size="12" font-weight="700" fill="#F5F5F8" text-anchor="middle">A</text>
+  <text x="76" y="697" font-size="16" fill="#B9B9C3">确认</text>
+
+  <!-- B 返回 -->
+  <circle cx="148" cy="692" r="12" fill="#282436"/>
+  <text x="148" y="697" font-size="12" font-weight="700" fill="#F5F5F8" text-anchor="middle">B</text>
+  <text x="168" y="697" font-size="16" fill="#B9B9C3">返回</text>
+
+  <!-- X 收藏 -->
+  <circle cx="240" cy="692" r="12" fill="#282436"/>
+  <text x="240" y="697" font-size="12" font-weight="700" fill="#F5F5F8" text-anchor="middle">X</text>
+  <text x="260" y="697" font-size="16" fill="#B9B9C3">收藏</text>
+
+  <!-- L/R -->
+  <text x="360" y="697" font-size="16" fill="#828291">L/R 切换区块</text>
+
+  <!-- + menu -->
+  <text x="1180" y="697" font-size="16" fill="#B9B9C3" text-anchor="end">+ 菜单</text>
+
+  <!-- Frame label -->
+  <rect x="1080" y="12" width="0" height="0" fill="none"/>
+</svg>

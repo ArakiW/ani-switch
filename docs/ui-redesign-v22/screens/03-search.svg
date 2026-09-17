@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" font-family="Noto Sans SC, Source Han Sans SC, sans-serif">
+  <!-- Search · Switch 720p -->
+  <defs>
+    <linearGradient id="p1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5B3A8C"/><stop offset="100%" stop-color="#1A2744"/>
+    </linearGradient>
+    <linearGradient id="p2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2D4A6F"/><stop offset="100%" stop-color="#1A1A2E"/>
+    </linearGradient>
+    <linearGradient id="p3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6B3A4A"/><stop offset="100%" stop-color="#241820"/>
+    </linearGradient>
+    <filter id="fg">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#A78BFA" flood-opacity="0.35"/>
+    </filter>
+    <linearGradient id="pf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="50%" stop-color="#0B0910" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#0B0910" stop-opacity="0.9"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="720" fill="#0B0910"/>
+
+  <!-- Search field focused -->
+  <rect x="48" y="48" width="1184" height="72" rx="16" fill="#16131F" stroke="#A78BFA" stroke-width="2"/>
+  <circle cx="88" cy="84" r="14" fill="none" stroke="#A78BFA" stroke-width="3"/>
+  <line x1="98" y1="94" x2="110" y2="106" stroke="#A78BFA" stroke-width="3"/>
+  <text x="130" y="94" font-size="28" fill="#F5F5F8">芙莉莲</text>
+  <rect x="250" y="72" width="2" height="28" fill="#A78BFA"/>
+  <text x="1180" y="94" font-size="16" fill="#828291" text-anchor="end">A 打开键盘</text>
+
+  <!-- History chips -->
+  <text x="48" y="168" font-size="20" fill="#828291">最近搜索</text>
+  <rect x="160" y="148" width="100" height="36" rx="18" fill="#1F1B2B"/>
+  <text x="210" y="172" font-size="16" fill="#B9B9C3" text-anchor="middle">迷宫饭</text>
+  <rect x="272" y="148" width="112" height="36" rx="18" fill="#1F1B2B"/>
+  <text x="328" y="172" font-size="16" fill="#B9B9C3" text-anchor="middle">孤独摇滚</text>
+  <rect x="396" y="148" width="100" height="36" rx="18" fill="#1F1B2B"/>
+  <text x="446" y="172" font-size="16" fill="#B9B9C3" text-anchor="middle">推しの子</text>
+
+  <!-- Results count -->
+  <text x="48" y="220" font-size="22" fill="#F5F5F8">搜索结果 · 12</text>
+
+  <!-- Grid 5 x 2 posters: w=168 h=252 gap=16, start y=240 -->
+  <!-- Row1 -->
+  <g filter="url(#fg)">
+    <rect x="48" y="240" width="168" height="252" rx="12" fill="url(#p1)" stroke="#A78BFA" stroke-width="3"/>
+  </g>
+  <rect x="48" y="240" width="168" height="252" rx="12" fill="url(#pf)"/>
+  <text x="60" y="460" font-size="18" font-weight="600" fill="#F5F5F8">葬送的芙莉莲</text>
+  <text x="60" y="480" font-size="14" fill="#B9B9C3">★ 8.7</text>
+
+  <rect x="232" y="248" width="160" height="244" rx="12" fill="url(#p2)"/>
+  <rect x="232" y="248" width="160" height="244" rx="12" fill="url(#pf)"/>
+  <text x="244" y="460" font-size="16" fill="#F5F5F8">芙莉莲 ~前日谈~</text>
+
+  <rect x="408" y="248" width="160" height="244" rx="12" fill="url(#p3)"/>
+  <rect x="408" y="248" width="160" height="244" rx="12" fill="url(#pf)"/>
+  <text x="420" y="460" font-size="16" fill="#F5F5F8">剧场版</text>
+
+  <rect x="584" y="248" width="160" height="244" rx="12" fill="#282436"/>
+  <rect x="584" y="248" width="160" height="244" rx="12" fill="url(#pf)"/>
+  <text x="596" y="460" font-size="16" fill="#B9B9C3">相关作品</text>
+
+  <rect x="760" y="248" width="160" height="244" rx="12" fill="#1F1B2B"/>
+  <rect x="760" y="248" width="160" height="244" rx="12" fill="url(#pf)"/>
+  <text x="772" y="460" font-size="16" fill="#B9B9C3">漫画</text>
+
+  <!-- Row2 partial -->
+  <rect x="48" y="516" width="160" height="130" rx="12" fill="url(#p2)" opacity="0.85"/>
+  <rect x="232" y="516" width="160" height="130" rx="12" fill="url(#p1)" opacity="0.8"/>
+  <rect x="408" y="516" width="160" height="130" rx="12" fill="#282436" opacity="0.75"/>
+  <rect x="584" y="516" width="160" height="130" rx="12" fill="url(#p3)" opacity="0.7"/>
+  <rect x="760" y="516" width="160" height="130" rx="12" fill="#1F1B2B" opacity="0.65"/>
+
+  <!-- HUD -->
+  <rect x="0" y="664" width="1280" height="56" fill="#0B0910" opacity="0.92"/>
+  <rect x="0" y="664" width="1280" height="1" fill="#FFFFFF" opacity="0.08"/>
+  <circle cx="56" cy="692" r="12" fill="#4F378B"/>
+  <text x="56" y="697" font-size="12" font-weight="700" fill="#F5F5F8" text-anchor="middle">A</text>
+  <text x="76" y="697" font-size="16" fill="#B9B9C3">打开 / 选中</text>
+  <circle cx="200" cy="692" r="12" fill="#282436"/>
+  <text x="200" y="697" font-size="12" font-weight="700" fill="#F5F5F8" text-anchor="middle">B</text>
+  <text x="220" y="697" font-size="16" fill="#B9B9C3">返回</text>
+  <text x="1180" y="697" font-size="16" fill="#B9B9C3" text-anchor="end">+ 菜单</text>
+</svg>

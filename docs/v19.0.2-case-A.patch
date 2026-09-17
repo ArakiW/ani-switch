@@ -1,0 +1,148 @@
+diff --git a/src/net/http.cpp b/src/net/http.cpp
+--- a/src/net/http.cpp
++++ b/src/net/http.cpp
+@@ -19,33 +19,10 @@ extern "C" int  aniswitchResolveHost(const char* host, char* out_ip, size_t out_
+}
+
+#if defined(__SWITCH__)
+// v16.10.8: hardcoded IP fallback for the handful of hosts
+// ani-switch talks to. cpr/curl/mbedTLS over the broken
+// newlib gethostbyname path hangs in hbmenu applet mode; the
+// raw UDP DNS resolver in `switch_wrapper.c` works against
+// 8.8.8.8:53, but if even that fails (e.g. captive portal
+// hijacks DNS, or 8.8.8.8 is firewalled) we still want the
+// pre-rewrite path to work.  These IPs were resolved against
+// dns.google from a normal connection on 2026-09-08 and are
+// stable Cloudflare (bgm.tv) / Azure (dandanplay.net) /
+// Railway (myani.org) edges.  If a host moves we will see
+// `NETDIAG3: hardcoded-fallback` followed by an HTTP error
+// and can re-resolve manually.
+-struct HardcodedHost { const char* host; const char* ip; };
+-static const HardcodedHost kHardcodedHosts[] = {
+-    {"api.bgm.tv",             "104.26.8.23"},
+-    {"bgm.tv",                 "172.67.73.67"},
+-    {"lain.bgm.tv",            "104.26.9.23"},
+-    {"api.dandanplay.net",     "13.75.95.196"},
+-    {"danmaku-cn.myani.org",   "69.46.46.28"},
+-    {"danmaku.api.myani.org",  "69.46.46.28"},
+-};
+-static const char* lookupHardcodedHost(const char* host) {
+-    for (const auto& h : kHardcodedHosts) {
+-        if (strcmp(h.host, host) == 0) return h.ip;
+-    }
+-    return nullptr;
+-}
++// v19.0.2 case A: drop the v16.10.8 hardcoded IP table.  The
++// Cloudflare anycast edges that api.bgm.tv / bgm.tv / lain.bgm.tv
++// resolve to rotate regularly (typically daily), and a stale IP
++// in the table produced `Connection reset by peer` once the
++// user saw the old address handed back by the kernel's SYN —
++// the IP was no longer accepting new connections.  The raw UDP
++// DNS resolver in `switch_wrapper.c` queries 8.8.8.8:53 with
++// a 5 s timeout and caches results for the process lifetime,
++// which is enough to pick up a fresh IP on the next launch
++// without bothering the user.  If 8.8.8.8 is itself
++// unreachable (captive portal, ISP firewall) we return -1
++// here and the HTTP layer reports a clean error rather than
++// the misleading TCP RST we used to see.
+#endif
+
+@@ -227,21 +204,15 @@ int HTTP::rewriteUrlForIP(const std::string& url,
+    // v16.10.9: in-memory DNS cache.  The raw UDP resolver does a
+    // 5s-timeout DNS query to 8.8.8.8:53 each time it sees a new
+    // host; web_selector_provider's 30+ video sources trigger
+    // that path for every search and detail fetch even though
+    // the same host comes up across many subjects.  The cache
+    // is process-local, no expiry (v16.10.9 is the first
+    // version that actually exercises any of this on real
+    // hardware, so we can wait for field data before adding
+-   // TTL logic).  Pre-resolved hardcoded entries (set in
+-   // kHardcodedHosts) and the 6 hardcoded hosts don't enter
+-   // the cache because they short-circuit before this branch.
++   // TTL logic).
+    static std::unordered_map<std::string, std::string> kDnsCache;
+#endif
+    effectiveUrl = url;
+    hostForHeader.clear();
+#if defined(__SWITCH__)
+    auto s = url.find("://");
+    if (s == std::string::npos) return -1;
+    s += 3;
+    auto e = url.find_first_of("/?#", s);
+    std::string host = url.substr(s, (e == std::string::npos) ? std::string::npos : e - s);
+    if (host.empty()) return -1;
+-   const char* hardcoded = lookupHardcodedHost(host.c_str());
+    char ipBuf[32] = {0};
+    const char* ip = nullptr;
+-   if (hardcoded) {
+-       ip = hardcoded;
+-       char _b[160];
+-       snprintf(_b, sizeof(_b), "HTTP: RESOLVE %s -> %s (hardcoded)",
+-                host.c_str(), ip);
+-       aniswitchStartupLog(_b);
+-   } else {
+        // v16.10.9: cache lookup before issuing a fresh raw DNS
+        // query.  The hardcoded short-circuit above never enters
+        // the cache (those entries are stable Cloudflare / Azure
+        // / Railway edges); only the dynamic web_selector_provider
+        // sources do.
+        auto it = kDnsCache.find(host);
+--
+NOTE: this patch is INCOMPLETE.  The hardcoded IP table is also
+referenced inline in `_cpr_post` (around L304 in the v19.0.1
+http.cpp) and `_cpr_get` (around L388), not just in
+`rewriteUrlForIP`.  After `git apply`-ing the two hunks above,
+you must also manually clean those two callers; otherwise
+compilation will fail with:
+
+    undefined reference to `lookupHardcodedHost(char const*)'
+
+The inline pattern in both callers looks like this in v19.0.1:
+
+    const char* hardcoded = lookupHardcodedHost(host.c_str());
+    char ipBuf[32] = {0};
+    const char* ip = nullptr;
+    if (hardcoded) {
+        ip = hardcoded;
+        snprintf(_b, sizeof(_b), "HTTP: RESOLVE %s -> %s (hardcoded)",
+                 host.c_str(), ip);
+        aniswitchStartupLog(_b);
+    } else {
+        if (aniswitchResolveHost(host.c_str(), ipBuf, sizeof(ipBuf)) == 0) {
+            ip = ipBuf;
+            ...
+        }
+    }
+    if (ip) {
+        // then session->SetResolve(...)
+    }
+
+Replace both blocks with the unconditional `aniswitchResolveHost` form:
+
+    if (!hostForResolve.empty()) {
+        char ipBuf[32] = {0};
+        const char* ip = nullptr;
+        if (aniswitchResolveHost(hostForResolve.c_str(), ipBuf, sizeof(ipBuf)) == 0) {
+            ip = ipBuf;
+            char _b[160];
+            snprintf(_b, sizeof(_b), "HTTP: RESOLVE %s -> %s (raw DNS)",
+                     hostForResolve.c_str(), ip);
+            aniswitchStartupLog(_b);
+        } else {
+            char _b[160];
+            snprintf(_b, sizeof(_b), "HTTP: RESOLVE %s FAILED (raw DNS)",
+                     hostForResolve.c_str());
+            aniswitchStartupLog(_b);
+        }
+        if (ip) {
+            session->SetResolve(cpr::Resolve{hostForResolve, ip, {443U}});
+        }
+    }
+
+The two callers are structurally identical (one for POST, one for
+GET); both must be updated.  After this manual fix the
+`lookupHardcodedHost` function and the `kHardcodedHosts` table
+have no remaining references and the linker is happy.
+
+v19.0.2 NRO (`E:\AI\ani-switch\release\20260910-011258\`)
+already has all three of these edits applied.

@@ -1,0 +1,24 @@
+# Reference: which upstream each third_party/ library was vendored from
+#
+# The actual files are vendored directly in third_party/ (not git submodules)
+# for build speed and offline build capability. To upgrade a library, fetch
+# the upstream URL below and replace the corresponding third_party/ directory.
+#
+# All URLs from xfangfang/wiliwili .gitmodules as of 2026-09-02.
+
+# third_party/borealis        <- https://github.com/xfangfang/borealis.git         v2.1.0
+# third_party/cpr             <- https://github.com/xfangfang/cpr.git              1.10.1
+# third_party/lunasvg         <- https://github.com/sammycage/lunasvg.git          v2.3.5
+# third_party/OpenCC          <- https://github.com/xfangfang/OpenCC.git           1.1.2
+# third_party/QR-Code-generator <- https://github.com/nayuki/QR-Code-generator.git  v1.8.0
+# third_party/pystring        <- https://github.com/imageworks/pystring.git       1.1.3
+# third_party/mongoose        <- https://github.com/xfangfang/mongoose.git         7.11
+# third_party/libpdr          <- https://github.com/xfangfang/libpdr.git           master
+# third_party/MemoryModule    <- https://github.com/xfangfang/MemoryModule.git     0.0.4
+
+# Upgrade procedure (manual):
+#   1. cd third_party/<lib>
+#   2. rm -rf * .gitignore 2>/dev/null
+#   3. git clone <upstream-url> .
+#   4. Test build (PC + Switch)
+#   5. Update version comment above
