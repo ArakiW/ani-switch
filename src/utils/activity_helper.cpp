@@ -27,6 +27,8 @@ namespace ui {
     brls::Activity* make_episode_list_activity(int32_t subjectId, int32_t resumeEpisodeId);
     brls::Activity* make_player_activity(int32_t episodeId, const std::string& danmakuSource,
                                          const std::string& videoSource, int64_t resumePositionMs);
+    brls::Activity* make_source_picker_activity(int32_t episodeId, int32_t subjectId,
+                                                const std::string& title, bool autoPickFirst);
     brls::Activity* make_my_collection_activity();
     brls::Activity* make_history_activity();
     brls::Activity* make_search_activity(const std::string& query);
@@ -81,6 +83,14 @@ void Intent::openEpisodeList(int32_t subjectId, int32_t resumeEpisodeId) {
 void Intent::openPlayer(int32_t episodeId, const std::string& danmakuSource,
                         const std::string& videoSource, int64_t resumePositionMs) {
     if (auto* a = ui::make_player_activity(episodeId, danmakuSource, videoSource, resumePositionMs)) {
+        brls::Application::pushActivity(a);
+    }
+}
+
+void Intent::openSourcePicker(int32_t episodeId, int32_t subjectId,
+                              const std::string& title, bool autoPickFirst) {
+    if (auto* a = ui::make_source_picker_activity(episodeId, subjectId, title,
+                                                  autoPickFirst)) {
         brls::Application::pushActivity(a);
     }
 }

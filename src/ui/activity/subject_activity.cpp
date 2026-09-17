@@ -143,16 +143,26 @@ void SubjectActivity::onContentAvailable() {
         onSubject(demo::makeDetail(subjectId_, name));
         onEpisodes(demo::episodesFor(subjectId_));
         meta_->setText(demo::kBanner);
-        // v22: local sample so playback is reachable from a demo shell.
+        // v22: online sample — real Bangumi episode + sources.json HTTP.
+        auto* playOnline = new brls::Button();
+        playOnline->setText("在线试播 (真实集 ID + HTTP 源)");
+        playOnline->setHeight(theme::kButtonHeight);
+        playOnline->setMarginBottom(6);
+        theme::applyFocusStyle(playOnline);
+        playOnline->registerClickAction([](brls::View*) {
+            // Frieren ep78 — EpisodeResolver + HTTPSourceProvider.
+            Intent::openPlayer(1656858, "dandanplay", "", 0);
+            return true;
+        });
+        episodeList_->addView(playOnline);
         auto* playLocal = new brls::Button();
         playLocal->setText("播放本地测试视频");
         playLocal->setHeight(theme::kButtonHeight);
         playLocal->setMarginBottom(12);
         theme::applyFocusStyle(playLocal);
         playLocal->registerClickAction([](brls::View*) {
-            Intent::openPlayer(-1, "",
-                               "sdmc:/switch/aniswitch/videos/test-local.mp4",
-                               0);
+            // Still go through picker so the UX is consistent.
+            Intent::openSourcePicker(-1, 0, "本地测试视频");
             return true;
         });
         episodeList_->addView(playLocal);
@@ -245,8 +255,11 @@ void SubjectActivity::onEpisodes(std::vector<Episode> episodes) {
         row->setHeight(theme::kRowHeight);
         row->setFocusable(true);
         theme::applyFocusStyle(row, 8.0f);
-        row->registerClickAction([epId](brls::View*) {
-            Intent::openPlayer(epId);
+        row->registerClickAction([epId, this](brls::View*) {
+            // v22: pick a play source first (animeko-style).
+            const std::string t =
+                title_ ? title_->getFullText() : std::string{};
+            Intent::openSourcePicker(epId, subjectId_, t);
             return true;
         });
         auto* idx = new brls::Label();

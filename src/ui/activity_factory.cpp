@@ -10,6 +10,7 @@
 #include "ui/activity/subject_activity.hpp"
 #include "ui/activity/episode_list_activity.hpp"
 #include "ui/activity/player_activity.hpp"
+#include "ui/activity/source_picker_activity.hpp"
 #include "ui/activity/search_activity.hpp"
 #include "ui/activity/my_collection_activity.hpp"
 #include "ui/activity/history_activity.hpp"
@@ -46,6 +47,10 @@ brls::Activity* make_episode_list_activity(int32_t s, int32_t r) {
 brls::Activity* make_player_activity(int32_t e, const std::string& ds,
                                      const std::string& vs, int64_t pos) {
     return new PlayerActivity(e, ds, vs, pos);
+}
+brls::Activity* make_source_picker_activity(int32_t e, int32_t s,
+                                            const std::string& t, bool autoPick) {
+    return new SourcePickerActivity(e, s, t, autoPick);
 }
 brls::Activity* make_my_collection_activity()  { return new MyCollectionActivity(); }
 brls::Activity* make_history_activity()        { return new HistoryActivity(); }

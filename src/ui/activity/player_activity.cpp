@@ -202,9 +202,6 @@ void PlayerActivity::downloadThenPlay(const std::string& url) {
         snprintf(b, sizeof(b), "player: downloadThenPlay %s", url.c_str());
         playerLog(b);
     }
-    // startup.16: cpr::Session ctor hung inside a detached std::thread
-    // on Switch. Stay on the calling (main) thread — the sample is a
-    // few hundred KB so a short block is acceptable.
     try {
         playerLog("player: dl path");
         uint64_t h = 1469598103934665603ULL;
@@ -214,40 +211,51 @@ void PlayerActivity::downloadThenPlay(const std::string& url) {
         playerLog("player: dl prepare session");
         cpr::Session s;
         HTTP::prepareFetchSession(s, url);
-        playerLog("player: dl get");
+        s.SetTimeout(cpr::Timeout{180000});
+        s.SetConnectTimeout(cpr::ConnectTimeout{20000});
+        // v22: stream binary to disk — r.text is unreliable for video.
+        std::ofstream file(out, std::ios::binary | std::ios::trunc);
+        size_t written = 0;
+        s.SetWriteCallback(cpr::WriteCallback{
+            [&file, &written](std::string data, intptr_t /*userdata*/) -> bool {
+                if (!file) return false;
+                file.write(data.data(), static_cast<std::streamsize>(data.size()));
+                written += data.size();
+                return true;
+            }});
+        playerLog("player: dl get (stream)");
         auto r = s.Get();
+        file.flush();
+        file.close();
+        std::error_code ec;
+        const auto fsize = std::filesystem::exists(out, ec)
+                               ? std::filesystem::file_size(out, ec)
+                               : 0;
         {
-            char b[160];
-            snprintf(b, sizeof(b), "player: dl status=%ld err=%s bytes=%zu",
+            char b[200];
+            snprintf(b, sizeof(b),
+                     "player: dl status=%ld err=%s stream=%zu file=%llu",
                      r.status_code,
                      r.error ? r.error.message.c_str() : "(none)",
-                     r.text.size());
+                     written,
+                     static_cast<unsigned long long>(fsize));
             playerLog(b);
         }
-        if (r.error || r.status_code != 200 || r.text.empty()) {
+        const bool ok = !r.error && r.status_code == 200 && fsize > 1024;
+        if (!ok) {
             if (!fallbackUrls_.empty()) {
                 const std::string next = fallbackUrls_.front();
                 fallbackUrls_.erase(fallbackUrls_.begin());
                 status_->setText("下载失败，切换备用源…");
                 start(next);
             } else {
-                status_->setText("在线下载失败");
+                status_->setText(fmt::format("在线下载失败 [{}]", r.status_code));
             }
             return;
         }
-        playerLog("player: dl write");
-        std::ofstream f(out, std::ios::binary);
-        f.write(r.text.data(), static_cast<std::streamsize>(r.text.size()));
-        f.close();
         playerLog("player: dl done, play");
         status_->setText(fmt::format("在线源 {:.1f} MB 开始播放",
-                                     r.text.size() / 1048576.0));
-        {
-            char b[80];
-            snprintf(b, sizeof(b), "player: online dl ok %zu bytes",
-                     r.text.size());
-            playerLog(b);
-        }
+                                     fsize / 1048576.0));
         start(out);
     } catch (const std::exception& e) {
         char b[160];
@@ -284,6 +292,9 @@ void PlayerActivity::start(const std::string& path) {
     videoSource_ = playPath;
     started_ = true;
     lastCheckpoint_ = -1;
+    if (status_) {
+        status_->setText(network ? ("加载中… " + path) : ("播放中… " + fsPath));
+    }
     auto& player = MPVCore::instance();
     player.reset();
     DanmakuCore::instance().reset();

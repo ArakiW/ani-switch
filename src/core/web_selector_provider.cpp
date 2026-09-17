@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: AGPL-3.0
 #include "core/web_selector_provider.hpp"
 #include "core/web_selector_cache.hpp"
 #include "net/http.hpp"
@@ -349,16 +349,11 @@ void WebSelectorProvider::ensureManifestLoaded() {
     WebSelectorData out;
     bool ok = false;
     cpr::Session session;
-    // v16.10.8.5: pre-resolve DNS — see image_helper.cpp.
-    // v16.10.9.1: abort early if the helper can't resolve.
-    std::string effectiveUrl, hostForHeader;
-    if (HTTP::rewriteUrlForIP(url, effectiveUrl, hostForHeader) != 0) {
+    // v22: TLS 1.2 pin + CA + hostname URL + SetResolve (SNI correct).
+    if (HTTP::prepareFetchSession(session, url) != 0) {
         brls::Logger::warning("WebSelector: manifest host not resolvable, abort");
+        manifestLoading_ = false;
         return;
-    }
-    session.SetUrl(cpr::Url{effectiveUrl});
-    if (!hostForHeader.empty()) {
-        session.UpdateHeader(cpr::Header{{"Host", hostForHeader}});
     }
     session.SetTimeout(cpr::Timeout{30000});
     auto r = session.Get();
@@ -372,22 +367,12 @@ void WebSelectorProvider::ensureManifestLoaded() {
         brls::Logger::warning("WebSelector: primary fetch failed ({}), retrying direct {}",
                                r.status_code, direct);
         cpr::Session s2;
-        // v16.10.8.5: pre-resolve DNS — see image_helper.cpp.
-        // v16.10.9.1: abort early if the helper can't resolve
-        // either gh-proxy.com or raw.githubusercontent.com.
-        std::string effectiveUrl2, hostForHeader2;
-        if (HTTP::rewriteUrlForIP(direct, effectiveUrl2, hostForHeader2) != 0) {
-            brls::Logger::warning("WebSelector: manifest fallback host not resolvable, abort");
-            return;
-        }
-        s2.SetUrl(cpr::Url{effectiveUrl2});
-        if (!hostForHeader2.empty()) {
-            s2.UpdateHeader(cpr::Header{{"Host", hostForHeader2}});
-        }
-        s2.SetTimeout(cpr::Timeout{30000});
-        auto r2 = s2.Get();
-        if (r2.status_code == 200) {
-            ok = WebSelectorData::parse(r2.text, out);
+        if (HTTP::prepareFetchSession(s2, direct) == 0) {
+            s2.SetTimeout(cpr::Timeout{30000});
+            auto r2 = s2.Get();
+            if (r2.status_code == 200) {
+                ok = WebSelectorData::parse(r2.text, out);
+            }
         }
     }
     {
@@ -520,34 +505,12 @@ void WebSelectorProvider::enumerate(int32_t episodeId,
 
         // Build a session with optional referer / user-agent / cookies.
         cpr::Session s;
-        // v16.10.8.4: pre-resolve DNS — same root cause as
-        // v16.10.8.2 / v16.10.8.3.  web_selector_provider talks
-        // to 30+ upstream sources (mostly unknown to our
-        // hardcoded table), so the raw UDP DNS path will do
-        // most of the work; hardcoded misses are fine because
-        // the helper falls through to the raw DNS resolver.
-        // v16.10.9.1: when the helper returns -1 (neither
-        // hardcoded nor raw DNS could resolve this host),
-        // abort this source right here.  Without this, the
-        // session is still created with the original hostname
-        // URL and libcurl's internal gethostbyname still
-        // hangs for 5-12s before timing out — 30+ sources
-        // each potentially stuck for 5s when one host moves
-        // is a 2-3 minute tail-end latency on the whole
-        // web_selector walk.  Bailing out cleanly lets the
-        // other sources proceed and the user sees a clear
-        // "RESOLVE FAILED" line in startup.log for the
-        // affected host.
-        std::string effectiveUrl, hostForHeader;
-        if (HTTP::rewriteUrlForIP(url, effectiveUrl, hostForHeader) != 0) {
+        // v22: hostname URL + SetResolve (SNI) + TLS 1.2 pin.
+        if (HTTP::prepareFetchSession(s, url) != 0) {
             brls::Logger::warning("WebSelector: skipping source '{}' (host not resolvable)",
                                    src.name);
             finish();
             continue;
-        }
-        s.SetUrl(cpr::Url{effectiveUrl});
-        if (!hostForHeader.empty()) {
-            s.UpdateHeader(cpr::Header{{"Host", hostForHeader}});
         }
         s.SetTimeout(cpr::Timeout{15000});
         s.SetHeader(cpr::Header{{"User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
@@ -591,20 +554,10 @@ void WebSelectorProvider::enumerate(int32_t episodeId,
             if (detailUrl.empty()) detailUrl = detailHref;
 
             cpr::Session s2;
-            // v16.10.8.5: pre-resolve DNS — see image_helper.cpp.
-            // v16.10.9.1: abort detail fetch if host is not
-            // resolvable — same logic as the manifest / per-
-            // source search HTML above.  Skipping the cpr
-            // session entirely saves a 5-12s libcurl DNS hang
-            // for every dead source.
-            std::string effectiveUrl3, hostForHeader3;
-            if (HTTP::rewriteUrlForIP(detailUrl, effectiveUrl3, hostForHeader3) != 0) {
+            // v22: hostname URL + SetResolve (SNI) for the detail page.
+            if (HTTP::prepareFetchSession(s2, detailUrl) != 0) {
                 brls::Logger::warning("WebSelector: detail host not resolvable, abort this source");
                 return void(finish());
-            }
-            s2.SetUrl(cpr::Url{effectiveUrl3});
-            if (!hostForHeader3.empty()) {
-                s2.UpdateHeader(cpr::Header{{"Host", hostForHeader3}});
             }
             s2.SetTimeout(cpr::Timeout{15000});
             s2.SetHeader(cpr::Header{{"User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},

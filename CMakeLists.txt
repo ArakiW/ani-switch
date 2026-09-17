@@ -406,6 +406,7 @@ set(ANISWITCH_SOURCES
     src/ui/activity/subject_activity.cpp
     src/ui/activity/episode_list_activity.cpp
     src/ui/activity/player_activity.cpp
+    src/ui/activity/source_picker_activity.cpp
     src/ui/activity/search_activity.cpp
     src/ui/activity/my_collection_activity.cpp
     src/ui/activity/history_activity.cpp

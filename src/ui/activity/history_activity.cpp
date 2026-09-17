@@ -251,13 +251,15 @@ void HistoryActivity::render(std::vector<SQLiteStore::HistoryEntry> v) {
             int32_t eid = e.episodeId;
             int64_t pos = e.positionMs;
             auto path = e.episodeName;
-            row->registerClickAction([eid, pos, path](brls::View*) {
-                // Demo rows use negative episode ids — no player.
+            row->registerClickAction([eid, pos, path, this](brls::View*) {
                 if (eid < 0) {
                     brls::Application::notify("演示条目，无法播放");
                     return true;
                 }
-                Intent::openPlayer(eid, "dandanplay", path, pos);
+                // v22: resume still goes through source picker when
+                // no explicit video URL is known.
+                Intent::openSourcePicker(eid, 0, path);
+                (void)pos;
                 return true;
             });
 

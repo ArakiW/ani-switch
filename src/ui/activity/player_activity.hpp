@@ -15,6 +15,8 @@ public:
     void onPause() override;
 private:
     void start(const std::string& path);
+    // v22: fetch progressive video via HTTP stack (fake-ip safe), then play.
+    void downloadThenPlay(const std::string& url);
     void onPlayerEvent(MpvEventEnum event);
     void checkpoint();
     int32_t episodeId_;
@@ -27,5 +29,7 @@ private:
     bool subscribed_ = false;
     bool started_ = false;
     std::shared_ptr<int> lifetime_ = std::make_shared<int>(0);
+    // v22: remaining online sources to try if the current URL fails.
+    std::vector<std::string> fallbackUrls_;
 };
 }

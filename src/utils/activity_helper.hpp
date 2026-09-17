@@ -48,6 +48,13 @@ public:
                           const std::string& videoSource   = "http",
                           int64_t resumePositionMs = 0);
 
+    // v22: animeko-style source picker before playback.
+    //   loading → source list → user picks → Player.
+    static void openSourcePicker(int32_t episodeId,
+                                 int32_t subjectId = 0,
+                                 const std::string& title = "",
+                                 bool autoPickFirst = false);
+
     // ---- User content ----------------------------------------------------
     static void openMyCollection();
     static void openHistory();

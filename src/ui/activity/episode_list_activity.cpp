@@ -77,8 +77,10 @@ void EpisodeListActivity::render(const std::vector<Episode>& eps) {
         }
 
         int32_t eid = e.id;
-        row->registerClickAction([eid](brls::View*) {
-            Intent::openPlayer(eid);
+        const std::string epTitle = e.nameCN.empty() ? e.name : e.nameCN;
+        const int32_t sid = subjectId_;
+        row->registerClickAction([eid, sid, epTitle](brls::View*) {
+            Intent::openSourcePicker(eid, sid, epTitle);
             return true;
         });
         list_->addView(row);

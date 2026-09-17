@@ -5,7 +5,10 @@
 #include "ui/fragment/home_recommend.hpp"
 #include "ui/hud.hpp"
 #include "ui/theme.hpp"
+#include "net/http.hpp"
 #include "utils/activity_helper.hpp"
+#include <nlohmann/json.hpp>
+#include <fstream>
 #include <borealis/views/scrolling_frame.hpp>
 #include <fmt/format.h>
 #include <fstream>
@@ -205,8 +208,16 @@ void MainActivity::onContentAvailable() {
                 else if (mode == "history") Intent::openHistory();
                 else if (mode == "settings") Intent::openSettings();
                 else if (mode == "subject") Intent::openSubject(-1);
-                else if (mode == "player") {
-                    Intent::openPlayer(-1, "", "sdmc:/switch/aniswitch/videos/test-local.mp4", 0);
+                else if (mode == "online") {
+                    Intent::openSourcePicker(1656858, 0, "在线演示源", true);
+                } else if (mode == "picker") {
+                    Intent::openSourcePicker(1656858, 0, "选源测试", false);
+                } else if (mode == "player") {
+                    Intent::openPlayer(-1, "",
+                                       "sdmc:/switch/aniswitch/videos/test-local.mp4",
+                                       0);
+                } else if (mode == "search") {
+                    Intent::openSearch();
                 } else {
                     Intent::openSearch();
                 }
