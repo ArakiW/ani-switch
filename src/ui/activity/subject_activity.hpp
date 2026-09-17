@@ -33,5 +33,7 @@ private:
     brls::Box*   tagsBox_    = nullptr;
     brls::Label* summary_    = nullptr;
     brls::Box*   episodeList_ = nullptr;
+    // v22: contentView is the HUD wrap Box; this is the real scroll.
+    brls::ScrollingFrame* scroll_ = nullptr;
 };
 }

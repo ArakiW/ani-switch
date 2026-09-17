@@ -8,6 +8,8 @@
 #include "utils/activity_helper.hpp"
 #include <borealis/views/scrolling_frame.hpp>
 #include <fmt/format.h>
+#include <fstream>
+#include <string>
 
 #if defined(__SWITCH__)
 extern "C" void aniswitchStartupLog(const char* message);
@@ -183,6 +185,35 @@ void MainActivity::onContentAvailable() {
     // ---- Bottom HUD (must be built AFTER registerAction so chips
     // reflect the live ActionMap — DESIGN.md §6.4) ----
     root->addView(buildHudFromActions(this->getContentView()));
+
+#if defined(__SWITCH__)
+    // v22 field-test: if sdmc:/switch/aniswitch/autotour exists, open
+    // that screen after a short delay so emulator/device smoke can
+    // screenshot secondary pages without input injection.
+    {
+        std::ifstream f("sdmc:/switch/aniswitch/autotour");
+        std::string mode;
+        if (f.good() && std::getline(f, mode)) {
+            while (!mode.empty() && (mode.back() == '\r' || mode.back() == '\n'))
+                mode.pop_back();
+            aniswitchStartupLog("AUTOTOUR: armed");
+            brls::delay(3500, [mode]() {
+                char buf[120];
+                snprintf(buf, sizeof(buf), "AUTOTOUR: open %s", mode.c_str());
+                aniswitchStartupLog(buf);
+                if (mode == "collection") Intent::openMyCollection();
+                else if (mode == "history") Intent::openHistory();
+                else if (mode == "settings") Intent::openSettings();
+                else if (mode == "subject") Intent::openSubject(-1);
+                else if (mode == "player") {
+                    Intent::openPlayer(-1, "", "sdmc:/switch/aniswitch/videos/test-local.mp4", 0);
+                } else {
+                    Intent::openSearch();
+                }
+            });
+        }
+    }
+#endif
 }
 
 }  // namespace aniswitch

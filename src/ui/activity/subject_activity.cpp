@@ -18,6 +18,7 @@ SubjectActivity::~SubjectActivity() = default;
 
 void SubjectActivity::onContentAvailable() {
     auto* scroll = new brls::ScrollingFrame();
+    scroll_ = scroll;
 
     // Top section: cover + title + meta.
     auto* top = new brls::Box();
@@ -142,6 +143,19 @@ void SubjectActivity::onContentAvailable() {
         onSubject(demo::makeDetail(subjectId_, name));
         onEpisodes(demo::episodesFor(subjectId_));
         meta_->setText(demo::kBanner);
+        // v22: local sample so playback is reachable from a demo shell.
+        auto* playLocal = new brls::Button();
+        playLocal->setText("播放本地测试视频");
+        playLocal->setHeight(theme::kButtonHeight);
+        playLocal->setMarginBottom(12);
+        theme::applyFocusStyle(playLocal);
+        playLocal->registerClickAction([](brls::View*) {
+            Intent::openPlayer(-1, "",
+                               "sdmc:/switch/aniswitch/videos/test-local.mp4",
+                               0);
+            return true;
+        });
+        episodeList_->addView(playLocal);
     } else {
         presenter_.refresh();
     }
@@ -266,7 +280,7 @@ void SubjectActivity::onCharacters(std::vector<SubjectCharacter> characters) {
     // 2=配角, 3=客串) and by character.  The previous v16.0.8.1
     // build only rendered the first 8 actors as a chip row —
     // not enough on subjects with 20+ cast members.
-    auto* scroll = dynamic_cast<brls::ScrollingFrame*>(getContentView());
+    auto* scroll = scroll_;
     if (!scroll) return;
 
     auto* castHeader = new brls::Label();
@@ -325,7 +339,7 @@ void SubjectActivity::onRelations(std::vector<SubjectRelation> relations) {
     // endpoint returns "this X is related to Y" pairs.  Each
     // SubjectRelation nests a full Subject so we read name + id from
     // `r.subject`.
-    auto* scroll = dynamic_cast<brls::ScrollingFrame*>(getContentView());
+    auto* scroll = scroll_;
     if (!scroll) return;
 
     auto* header = new brls::Label();
@@ -376,7 +390,7 @@ void SubjectActivity::onRelations(std::vector<SubjectRelation> relations) {
 }
 
 void SubjectActivity::onComments(std::vector<Comment> comments) {
-    auto* scroll = dynamic_cast<brls::ScrollingFrame*>(getContentView());
+    auto* scroll = scroll_;
     if (!scroll) return;
 
     auto* header = new brls::Label();
@@ -446,7 +460,7 @@ void SubjectActivity::onComments(std::vector<Comment> comments) {
 // state without scrolling through the cast/relations list.
 void SubjectActivity::onRating(SubjectRating rating) {
     if (rating.total <= 0 || rating.scoreText.empty()) return;
-    auto* scroll = dynamic_cast<brls::ScrollingFrame*>(getContentView());
+    auto* scroll = scroll_;
     if (!scroll) return;
 
     auto* row = new brls::Box();
@@ -463,7 +477,7 @@ void SubjectActivity::onRating(SubjectRating rating) {
 
 void SubjectActivity::onMyCollection(UserCollection c) {
     if (c.subjectId == 0) return;  // 404 = not in collection
-    auto* scroll = dynamic_cast<brls::ScrollingFrame*>(getContentView());
+    auto* scroll = scroll_;
     if (!scroll) return;
 
     static const char* kTypeNames[] = {
