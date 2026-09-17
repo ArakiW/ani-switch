@@ -188,17 +188,16 @@ void SourcePickerActivity::renderSources(std::vector<VideoSource> sources) {
         const std::string label =
             sorted.front().label.empty() ? url : sorted.front().label;
         if (status_) {
-            status_->setText("已选推荐源，加载中…  " + label);
+            status_->setText("已选推荐源，打开播放器…  " + label);
         }
 #if defined(__SWITCH__)
-        aniswitchStartupLog("PICKER: autopick first source");
+        aniswitchStartupLog("PICKER: autopick first source → openPlayer");
 #endif
         const int32_t epid = episodeId_;
-        std::weak_ptr<int> life = lifetime_;
-        brls::delay(1200, [life, epid, url]() {
-            if (life.expired()) return;
-            Intent::openPlayer(epid, "", url, 0);
-        });
+        // Open player immediately — delay + weak_ptr sometimes never
+        // fired in Eden and left the picker stuck on "加载中".
+        Intent::openPlayer(epid, "", url, 0);
+        return;
     }
 }
 

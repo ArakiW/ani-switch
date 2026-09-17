@@ -2,6 +2,7 @@
 //
 // v22: TsVitch player graft — VideoView OSD + ani online download.
 #include "ui/activity/player_activity.hpp"
+#include "ui/theme.hpp"
 #include "player/tsvitch_video_view.hpp"
 #include "player/mpv_core.hpp"
 #include "core/episode_resolver.hpp"
@@ -28,7 +29,9 @@ PlayerActivity::PlayerActivity(int32_t episodeId, const std::string&,
                                const std::string& videoSource,
                                int64_t resumePositionMs)
     : episodeId_(episodeId), videoSource_(videoSource),
-      resumePositionMs_(resumePositionMs) {}
+      resumePositionMs_(resumePositionMs) {
+    PLOG("player: ctor");
+}
 
 PlayerActivity::~PlayerActivity() {
     lifetime_.reset();
@@ -36,32 +39,31 @@ PlayerActivity::~PlayerActivity() {
 }
 
 void PlayerActivity::onContentAvailable() {
-    video_ = dynamic_cast<VideoView*>(getView("video"));
-    if (video_) {
-        video_->setTitle(fmt::format("播放 {}", episodeId_));
-        video_->setVideoMode();
-        video_->showLoading();
-        // B = OSD lock / exit (TsVitch pattern).
-        video_->registerAction("", brls::BUTTON_B, [this](brls::View*) {
-            if (video_->isOSDLock()) {
-                video_->toggleOSD();
-            } else if (video_->isOSDShown()) {
-                video_->toggleOSD();
-            } else {
-                brls::Application::popActivity();
-            }
-            return true;
-        });
-        video_->registerAction("暂停", brls::BUTTON_X, [this](brls::View*) {
-            video_->togglePlay();
-            return true;
-        });
-        video_->registerAction("返回列表", brls::BUTTON_Y, [this](brls::View*) {
-            brls::Application::popActivity();
-            return true;
-        });
-    }
-
+    PLOG("player: tsvitch onContentAvailable");
+    // Always build TsVitch VideoView in C++ — XML activity shell only
+    // hosts an empty Box so inflate cannot abort before we get here.
+    auto* box = new brls::Box();
+    box->setAxis(brls::Axis::COLUMN);
+    box->setBackgroundColor(nvgRGB(0, 0, 0));
+#ifdef __SWITCH__
+    box->setWidth(theme::kDesignWidth);
+#endif
+    video_ = new VideoView();
+    video_->setGrow(1.0f);
+    box->addView(video_);
+    setContentView(box);
+    PLOG("player: VideoView created");
+    video_->setTitle(fmt::format("播放 {}", episodeId_));
+    video_->setVideoMode();
+    video_->showLoading();
+    video_->registerAction("返回", brls::BUTTON_B, [this](brls::View*) {
+        brls::Application::popActivity();
+        return true;
+    });
+    video_->registerAction("暂停", brls::BUTTON_X, [this](brls::View*) {
+        video_->togglePlay();
+        return true;
+    });
     PLOG("player: tsvitch shell ready");
     // Explicit URL → play immediately.
     if (!videoSource_.empty() && videoSource_ != "http" &&

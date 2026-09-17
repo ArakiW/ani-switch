@@ -10,13 +10,26 @@
 #include <fmt/format.h>
 #include <ctime>
 
+#if defined(__SWITCH__)
+extern "C" void aniswitchStartupLog(const char*);
+#define VLOG(m) aniswitchStartupLog(m)
+#else
+#define VLOG(m) do { (void)0; } while (0)
+#endif
+
 using namespace brls::literals;
 
 VideoView::VideoView() {
     mpvCore_ = &aniswitch::MPVCore::instance();
-    this->inflateFromXMLRes("xml/views/video_view.xml");
+    VLOG("VideoView: ctor begin");
+    try {
+        this->inflateFromXMLRes("xml/views/video_view.xml");
+        VLOG("VideoView: ctor done");
+    } catch (const std::exception& e) {
+        brls::Logger::error("VideoView: XML inflate failed: {}", e.what());
+        VLOG("VideoView: XML inflate failed");
+    }
     brls::Logger::info("VideoView (TsVitch graft): create");
-    // Bottom OSD toggle: play/pause
     if (btnToggle) {
         btnToggle->registerClickAction([this](brls::View*) {
             togglePlay();

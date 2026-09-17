@@ -4,6 +4,12 @@
 #include "utils/config_helper.hpp"
 #include "net/bgm_client.hpp"
 #include "net/http.hpp"
+#include "player/tsvitch_video_view.hpp"
+#include "player/tsvitch_svg_image.hpp"
+#include "player/tsvitch_video_profile.hpp"
+#include "player/tsvitch_video_progress_slider.hpp"
+#include "player/tsvitch_hint_label.hpp"
+#include <borealis.hpp>
 #include <filesystem>
 #include <borealis/core/logger.hpp>
 #include <fmt/format.h>
@@ -301,7 +307,14 @@ void ProgramConfig::setProxy(const std::string& proxy) {
 }
 std::string ProgramConfig::getProxy() const { return httpProxy; }
 
-void Register::initCustomView()  { /* views registered in their own translation units */ }
+void Register::initCustomView() {
+    // v22 TsVitch player graft — XML views used by player_tsvitch.xml
+    brls::Application::registerXMLView("VideoView", ::VideoView::create);
+    brls::Application::registerXMLView("SVGImage", ::SVGImage::create);
+    brls::Application::registerXMLView("VideoProfile", ::VideoProfile::create);
+    brls::Application::registerXMLView("VideoProgressSlider", ::VideoProgressSlider::create);
+    brls::Application::registerXMLView("HintLabel", ::HintLabel::create);
+}
 void Register::initCustomTheme() { /* themes applied via XML layouts */ }
 void Register::initCustomStyle() { /* styles applied via XML layouts */ }
 const std::string& Register::getCustomThemeColorHex() { return customThemeColorHex; }

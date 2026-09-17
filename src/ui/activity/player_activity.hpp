@@ -21,6 +21,8 @@ public:
                    int64_t resumePositionMs);
     ~PlayerActivity() override;
     void onContentAvailable() override;
+    // v22: if XML inflate of VideoView fails, rebuild programmatically.
+    void onContentAvailableFallback();
 
 private:
     void startPlayback(const std::string& url);
