@@ -40,19 +40,10 @@ PlayerActivity::~PlayerActivity() {
 
 void PlayerActivity::onContentAvailable() {
     PLOG("player: tsvitch onContentAvailable");
-    // Always build TsVitch VideoView in C++ — XML activity shell only
-    // hosts an empty Box so inflate cannot abort before we get here.
-    auto* box = new brls::Box();
-    box->setAxis(brls::Axis::COLUMN);
-    box->setBackgroundColor(nvgRGB(0, 0, 0));
-#ifdef __SWITCH__
-    box->setWidth(theme::kDesignWidth);
-#endif
+    // Full-window VideoView — same as aniswitch player that painted OK.
     video_ = new VideoView();
-    video_->setGrow(1.0f);
-    box->addView(video_);
-    setContentView(box);
-    PLOG("player: VideoView created");
+    setContentView(video_);
+    PLOG("player: VideoView as contentView");
     video_->setTitle(fmt::format("播放 {}", episodeId_));
     video_->setVideoMode();
     video_->showLoading();
@@ -131,6 +122,7 @@ void PlayerActivity::startPlayback(const std::string& url) {
     if (!video_) return;
     video_->showLoading();
     video_->setUrl(url);
+    video_->invalidate();
     PLOG("player: tsvitch setUrl");
 }
 
@@ -186,6 +178,8 @@ void PlayerActivity::downloadThenPlay(const std::string& url) {
         PLOG("player: dl ok, play");
         if (video_) video_->hideLoading();
         startPlayback(out);
+        // Kick one more frame after load.
+        if (video_) video_->invalidate();
     } catch (const std::exception& e) {
         if (video_) {
             video_->hideLoading();

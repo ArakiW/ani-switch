@@ -284,6 +284,9 @@ public:
      */
     void draw(brls::Rect rect, float alpha = 1.0);
 
+    // v22 TsVitch VideoView: paint size must track the widget frame.
+    void setFrameSize(brls::Rect rect);
+
     mpv_render_context *getContext();
 
     mpv_handle *getHandle();
@@ -498,12 +501,6 @@ private:
     void init();
 
     void clean();
-
-    /**
-     * 设置视频渲染区域大小
-     * @param rect 视频区域
-     */
-    void setFrameSize(brls::Rect rect);
 
     /// MPV callbacks
 

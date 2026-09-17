@@ -181,6 +181,8 @@ void VideoView::registerMpvEvent() {
     if (registerMPVEvent_) return;
     registerMPVEvent_ = true;
     eventSubscribeID_ = mpvCore_->getEvent()->subscribe([this](MpvEventEnum event) {
+        // Force a redraw so mpv frames actually hit the screen.
+        this->invalidate();
         switch (event) {
             case MpvEventEnum::LOADING_START:
                 showLoading();
@@ -188,10 +190,15 @@ void VideoView::registerMpvEvent() {
             case MpvEventEnum::LOADING_END:
             case MpvEventEnum::MPV_PAUSE:
             case MpvEventEnum::MPV_RESUME:
+            case MpvEventEnum::MPV_LOADED:
+            case MpvEventEnum::START_FILE:
                 hideLoading();
+                hideCenterHint();
+                this->invalidate();
                 break;
             case MpvEventEnum::UPDATE_DURATION: {
                 double d = mpvCore_->getDouble("duration");
+                if (d <= 0) d = static_cast<double>(mpvCore_->video_progress);
                 int s = static_cast<int>(d);
                 setDuration(fmt::format("{:d}:{:02d}", s / 60, s % 60));
                 break;
@@ -227,10 +234,33 @@ brls::View* VideoView::create() { return new VideoView(); }
 
 void VideoView::draw(NVGcontext* vg, float x, float y, float width, float height,
                      brls::Style style, brls::FrameContext* ctx) {
+    // Paint mpv FIRST every frame (same as aniswitch::VideoView).
+    if (mpvCore_ && mpvCore_->isValid() && width > 0 && height > 0) {
+        mpvCore_->draw(brls::Rect(x, y, width, height), 1.0f);
+    }
+    // OSD chrome on top of the video.
     Box::draw(vg, x, y, width, height, style, ctx);
+    if (osdSlider) {
+        float p = osdSlider->getProgress();
+        if (p < 0) p = 0;
+        if (p > 1) p = 1;
+        nvgBeginPath(vg);
+        nvgFillColor(vg, nvgRGBAf(0.65f, 0.54f, 0.98f, 0.9f));
+        nvgRect(vg, x, y + height - 3, width * p, 3);
+        nvgFill(vg);
+    }
     if (is_osd_shown_ && !is_osd_lock_) {
         std::time_t now = std::time(nullptr);
         if (osdLastShowTime_ > 0 && now - osdLastShowTime_ > 5) hideOSD();
+    }
+}
+
+void VideoView::onLayout() {
+    brls::View::onLayout();
+    if (mpvCore_) {
+        brls::Rect f = getFrame();
+        if (f.getWidth() > 1 && f.getHeight() > 1)
+            mpvCore_->setFrameSize(f);
     }
 }
 
