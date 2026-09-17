@@ -1,14 +1,36 @@
 ---
 feature: all-pages-content
-status: in-progress
+status: delivered
 updated: 2026-09-17
 branch: compose-next/all-pages-content
-commits: 8bb8498..HEAD
+commits: 8bb8498..0d22003
 ---
 
 # All Pages Content + Demo Fallback
 
 ## Report
+
+**What was built** — Every primary screen now renders a filled layout when
+real data is missing. `src/ui/demo_data.hpp` supplies shared demo subjects,
+a week schedule, collection rows, and history rows (negative sentinel ids).
+Search shows an 8-card poster grid on idle and on empty/error; Collection
+fills when not logged in or empty; History fills when empty; Daily fills a
+full week when the schedule API returns nothing; opening a demo poster
+shows a real detail shell (title, summary, 8 episodes) without network.
+Each fallback is labeled with a muted banner「演示数据（网络/账号不可用）」.
+
+**Verification** — `docker_build_simple.sh` linked `aniswitch.nro`
+(60a38173…, release/20260917-094030). Packaged as
+`dist/ani-switch-sd-v48.zip`. Eden input injection cannot reach the game
+window; on-device / manual Eden check still required for per-screen smoke.
+
+**Journey log**
+- Repo had zero commits; first commit is source-only because some
+  `third_party` files fail `git add` on Windows.
+- `git worktree add` was tool-blocked; work landed on branch
+  `compose-next/all-pages-content` in the main checkout.
+- History `render` switched to by-value so demo rows can replace an empty
+  const ref without `const_cast`.
 
 ## [S1] Problem
 User opens Search / Collection / History / Subject Detail / Daily and sees
