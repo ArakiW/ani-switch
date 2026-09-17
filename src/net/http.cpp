@@ -343,6 +343,7 @@ std::shared_ptr<cpr::Session> HTTP::createSession() {
 }
 
 int HTTP::prepareFetchSession(cpr::Session& session, const std::string& url) {
+    aniswitchStartupLog("HTTP: prepareFetch begin");
     session.SetTimeout(cpr::Timeout{HTTP::TIMEOUT});
     session.SetConnectTimeout(cpr::ConnectTimeout{HTTP::CONNECTION_TIMEOUT});
     session.SetHeader(HTTP::HEADERS);
@@ -350,6 +351,7 @@ int HTTP::prepareFetchSession(cpr::Session& session, const std::string& url) {
         session.SetProxies(HTTP::PROXIES);
     }
     session.SetVerifySsl(HTTP::VERIFY);
+    aniswitchStartupLog("HTTP: prepareFetch ssl");
     // Same TLS 1.2 pin as createSession — Cloudflare + mbedTLS 2.28
     // handshake without this fails with -0x7780.
     cpr::SslOptions sslOpts;
@@ -365,9 +367,13 @@ int HTTP::prepareFetchSession(cpr::Session& session, const std::string& url) {
     sslOpts.verify_host = false;
     sslOpts.ca_info = HTTP::SSL_CA_PATH;
     session.SetSslOptions(sslOpts);
+    aniswitchStartupLog("HTTP: prepareFetch url");
     session.SetUrl(cpr::Url{url});  // keep hostname — SNI
+    // Switch gethostbyname hangs; never follow redirects to a new host.
+    session.SetRedirect(cpr::Redirect{false});
 #if defined(__SWITCH__)
     if (HTTP::hasProxy()) return 0;
+    aniswitchStartupLog("HTTP: prepareFetch dns");
     return HTTP::applyDnsToSession(session, url);
 #else
     return 0;
@@ -398,8 +404,8 @@ bool dohResolve(const std::string& host, std::string& outIp) {
     for (const char* base : kDoh) {
         try {
             cpr::Session s;
-            s.SetTimeout(cpr::Timeout{4000});
-            s.SetConnectTimeout(cpr::ConnectTimeout{2500});
+            s.SetTimeout(cpr::Timeout{3000});
+            s.SetConnectTimeout(cpr::ConnectTimeout{2000});
             cpr::SslOptions ssl;
             ssl.ssl_version = CURL_SSLVERSION_TLSv1_2;
             ssl.ciphers =
@@ -469,6 +475,12 @@ int HTTP::resolveHostForUrl(const std::string& url,
                          (after == std::string::npos) ? std::string::npos
                                                       : after - hostStart);
     if (outHost.empty()) return -1;
+    {
+        char _b[160];
+        snprintf(_b, sizeof(_b), "HTTP: resolveHost begin %s",
+                 outHost.c_str());
+        aniswitchStartupLog(_b);
+    }
 
     static std::unordered_map<std::string, std::string> cache;
 

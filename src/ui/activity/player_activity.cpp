@@ -11,10 +11,13 @@
 #include "net/danmaku_parser.hpp"
 #include "utils/config_helper.hpp"
 #include "utils/sqlite_store.hpp"
+#include "net/http.hpp"
 #include <borealis/core/thread.hpp>
 #include <borealis/core/touch/tap_gesture.hpp>
+#include <cpr/cpr.h>
 #include <fstream>
 #include <filesystem>
+#include <thread>
 #include <fmt/format.h>
 
 #if defined(__SWITCH__) && defined(ANISWITCH_SWITCH_DEBUG)
@@ -150,16 +153,110 @@ void PlayerActivity::onContentAvailable() {
         }, "视频地址或本地路径", "", 2048);
     };
     if (episodeId_ <= 0) { brls::sync(prompt); return; }
+    status_->setText(fmt::format("解析在线源… (ep {})", episodeId_));
     EpisodeResolver::resolve(0, episodeId_, [this, lifetime, prompt](ResolvedEpisode result) {
         brls::sync([this, lifetime, prompt, result] {
             if (lifetime.expired()) return;
             subjectId_ = result.bangumiSubjectId;
             if (resumePositionMs_ == 0) resumePositionMs_ = result.resumePositionMs;
             auto source = SourceManager::instance().pickBest(result.sources);
-            if (source) start(source->url); else prompt();
+            if (source) {
+                // Keep the rest as fallbacks if this URL fails to load.
+                fallbackUrls_.clear();
+                for (const auto& s : result.sources) {
+                    if (s.url != source->url && !s.url.empty())
+                        fallbackUrls_.push_back(s.url);
+                }
+                status_->setText(fmt::format("在线播放: {}",
+                                             source->label.empty() ? source->url
+                                                                   : source->label));
+                start(source->url);
+            } else {
+                status_->setText("没有可用在线源，可手动输入地址");
+                prompt();
+            }
         });
-    }, [this, lifetime, prompt](const std::string&, int) { brls::sync(prompt); });
+    }, [this, lifetime, prompt](const std::string& msg, int) {
+        brls::sync([this, lifetime, prompt, msg] {
+            if (lifetime.expired()) return;
+            status_->setText("在线源解析失败: " + msg);
+            prompt();
+        });
+    });
 }
+
+#if defined(__SWITCH__)
+// Always-on breadcrumb for the online path (PLAYER_TRACE needs debug).
+static void playerLog(const char* m) {
+#if defined(ANISWITCH_SWITCH_DEBUG)
+    aniswitchStartupLog(m);
+#else
+    (void)m;
+#endif
+}
+
+void PlayerActivity::downloadThenPlay(const std::string& url) {
+    status_->setText("在线下载中…");
+    {
+        char b[200];
+        snprintf(b, sizeof(b), "player: downloadThenPlay %s", url.c_str());
+        playerLog(b);
+    }
+    // startup.16: cpr::Session ctor hung inside a detached std::thread
+    // on Switch. Stay on the calling (main) thread — the sample is a
+    // few hundred KB so a short block is acceptable.
+    try {
+        playerLog("player: dl path");
+        uint64_t h = 1469598103934665603ULL;
+        for (unsigned char c : url) { h ^= c; h *= 1099511628211ULL; }
+        const std::string out =
+            fmt::format("sdmc:/switch/aniswitch/vc_{:016x}.mp4", h);
+        playerLog("player: dl prepare session");
+        cpr::Session s;
+        HTTP::prepareFetchSession(s, url);
+        playerLog("player: dl get");
+        auto r = s.Get();
+        {
+            char b[160];
+            snprintf(b, sizeof(b), "player: dl status=%ld err=%s bytes=%zu",
+                     r.status_code,
+                     r.error ? r.error.message.c_str() : "(none)",
+                     r.text.size());
+            playerLog(b);
+        }
+        if (r.error || r.status_code != 200 || r.text.empty()) {
+            if (!fallbackUrls_.empty()) {
+                const std::string next = fallbackUrls_.front();
+                fallbackUrls_.erase(fallbackUrls_.begin());
+                status_->setText("下载失败，切换备用源…");
+                start(next);
+            } else {
+                status_->setText("在线下载失败");
+            }
+            return;
+        }
+        playerLog("player: dl write");
+        std::ofstream f(out, std::ios::binary);
+        f.write(r.text.data(), static_cast<std::streamsize>(r.text.size()));
+        f.close();
+        playerLog("player: dl done, play");
+        status_->setText(fmt::format("在线源 {:.1f} MB 开始播放",
+                                     r.text.size() / 1048576.0));
+        {
+            char b[80];
+            snprintf(b, sizeof(b), "player: online dl ok %zu bytes",
+                     r.text.size());
+            playerLog(b);
+        }
+        start(out);
+    } catch (const std::exception& e) {
+        char b[160];
+        snprintf(b, sizeof(b), "player: dl exception %s", e.what());
+        playerLog(b);
+        status_->setText(std::string("在线下载异常: ") + e.what());
+    }
+}
+#endif
 
 void PlayerActivity::start(const std::string& path) {
     // sdmc:/switch/... is a local Switch path — strip the scheme so
@@ -169,6 +266,15 @@ void PlayerActivity::start(const std::string& path) {
     if (!fsPath.empty() && fsPath[0] != '/') fsPath = "/" + fsPath;
 
     const bool network = path.rfind("http://", 0) == 0 || path.rfind("https://", 0) == 0;
+#if defined(__SWITCH__)
+    // v22: Switch network often sits behind Clash fake-ip (198.18.x).
+    // mpv cannot resolve that; download via our TLS/DNS stack then
+    // play the local cache file. This is still a network fetch.
+    if (network && !path.empty() && path.find(".m3u8") == std::string::npos) {
+        downloadThenPlay(path);
+        return;
+    }
+#endif
     if (!network && (fsPath.find("://") != std::string::npos || !std::filesystem::is_regular_file(fsPath))) {
         status_->setText("视频文件不存在: " + fsPath);
         brls::Logger::error("Player: local file missing: {}", fsPath);
@@ -263,7 +369,16 @@ void PlayerActivity::onPlayerEvent(MpvEventEnum event) {
         resumePositionMs_ = 0;
     }
     if (event == MpvEventEnum::MPV_FILE_ERROR) {
-        status_->setText(fmt::format("播放失败: {}", mpv_error_string(player.mpv_error_code)));
+        const auto err = mpv_error_string(player.mpv_error_code);
+        if (!fallbackUrls_.empty()) {
+            const std::string next = fallbackUrls_.front();
+            fallbackUrls_.erase(fallbackUrls_.begin());
+            status_->setText(fmt::format("源失败({})，切换备用…", err));
+            brls::Logger::warning("Player: {} failed, try fallback {}", videoSource_, next);
+            start(next);
+            return;
+        }
+        status_->setText(fmt::format("播放失败: {}", err));
     } else if (event == MpvEventEnum::UPDATE_PROGRESS || event == MpvEventEnum::MPV_LOADED) {
         status_->setText(fmt::format("{:.0f} / {} 秒", player.getPlaybackTime(), player.duration));
         auto second = static_cast<int64_t>(player.getPlaybackTime());
