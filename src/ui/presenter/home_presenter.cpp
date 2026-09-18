@@ -9,6 +9,7 @@ void HomePresenter::refresh() {
     // v20.2: Ani-only.  Field log proved api.animeko.org:443
     // connects from Switch without a proxy.  No nested Bangumi
     // fallback on the construction stack.
+    // v22.2: HOME LED is playback-scoped — no LED on home rails.
     AniClient::getAiringSchedule(
         uiCallback([this](std::vector<CalendarItem> cal) {
             brls::Logger::info("HomePresenter: ani schedule items={}", cal.size());

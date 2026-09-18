@@ -450,18 +450,33 @@ std::string WebSelectorProvider::extractMediaUrl(const std::string& detailHtml,
         "\"url\"\\s*:\\s*\"(https?:[^\"\\s]+?\\.(?:m3u8|mp4|mkv)[^\"\\s]*)\"",
         std::regex::ECMAScript | std::regex::icase);
 
-    if (src.matchVideoUrl.mark_count()) {
-        std::smatch m;
-        auto begin = std::sregex_iterator(detailHtml.begin(), detailHtml.end(), src.matchVideoUrl);
-        for (auto it = begin; it != std::sregex_iterator(); ++it) {
-            if (!(*it).empty()) {
-                std::string u = (*it)[0].str();
-                // Named capture group v holds the raw URL when present.
-                if (it->size() > 1 && !(*it)[1].str().empty() && src.matchVideoUrl.mark_count() >= 1) {
-                    // Prefer group "v" if the regex defines it.
+    // Prefer the upstream matchVideoUrl regex when it actually compiled.
+    // A default-constructed std::regex matches the empty string — never
+    // iterate it (infinite-position matches). Guard with hasMatchVideoUrl.
+    if (src.hasMatchVideoUrl) {
+        try {
+            std::string first;
+            auto begin = std::sregex_iterator(detailHtml.begin(), detailHtml.end(),
+                                              src.matchVideoUrl);
+            for (auto it = begin; it != std::sregex_iterator(); ++it) {
+                if ((*it).empty()) continue;
+                std::string u;
+                if (it->size() > 1 && !(*it)[1].str().empty())
+                    u = (*it)[1].str();
+                else
+                    u = (*it)[0].str();
+                u = unescapeJsonUrl(u);
+                if (u.find("http://") != std::string::npos ||
+                    u.find("https://") != std::string::npos ||
+                    u.find(".m3u8") != std::string::npos ||
+                    u.find(".mp4") != std::string::npos) {
+                    return u;
                 }
-                return unescapeJsonUrl(u);
+                if (first.empty()) first = u;
             }
+            if (!first.empty()) return first;
+        } catch (const std::regex_error&) {
+            brls::Logger::warning("WebSelector: matchVideoUrl regex invalid, skip");
         }
     }
 
@@ -482,13 +497,22 @@ void WebSelectorProvider::enumerate(int32_t episodeId,
         std::lock_guard<std::mutex> lock(ctxMutex_);
         auto it = contexts_.find(episodeId);
         if (it == contexts_.end()) {
-            if (error) error("WebSelector: no context for episode " + std::to_string(episodeId), -1);
+            // Soft-fail: "no context yet" is normal on the first
+            // SourceManager pass (EpisodeResolver tries sources.json
+            // before Bangumi metadata). Returning empty lets SourceManager
+            // fall through instead of aborting the whole resolve with
+            // "解析失败".
+            brls::Logger::info(
+                "WebSelector: no context for episode {} (soft empty)",
+                episodeId);
+            if (callback) callback({});
             return;
         }
         ctx = it->second;
     }
     if (ctx.subjectNameCN.empty() && ctx.subjectName.empty()) {
-        if (error) error("WebSelector: empty subject name in context", -2);
+        brls::Logger::info("WebSelector: empty subject name, soft empty");
+        if (callback) callback({});
         return;
     }
 
@@ -505,6 +529,17 @@ void WebSelectorProvider::enumerate(int32_t episodeId,
     {
         std::lock_guard<std::mutex> lock(manifestMutex_);
         sources = data_.sources;
+    }
+    // CRITICAL: if the manifest is empty (download failed / still loading /
+    // zero sources), the fan-out loop below never runs and `finish()` is
+    // never called — SourceManager would hang forever waiting on this
+    // provider. Soft-complete with an empty list instead.
+    if (sources.empty()) {
+        brls::Logger::info(
+            "WebSelector: manifest has 0 sources (ready={}), soft empty",
+            manifestReady_.load());
+        if (callback) callback({});
+        return;
     }
     // Sort: lower tier first (= better), name as a stable tiebreaker.
     std::sort(sources.begin(), sources.end(),

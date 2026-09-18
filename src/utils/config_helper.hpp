@@ -28,6 +28,9 @@ enum class SettingItem {
     PLAYER_LOW_QUALITY,
     PLAYER_INMEMORY_CACHE,
     PLAYER_HWDEC,
+    // 0 = seamless local ani:// stream (default); 1 = mpv direct network
+    // (wiliwili-style loadfile http/https/m3u8 + optional http-proxy).
+    PLAYER_STREAM_MODE,
     PLAYER_VOLUME,
     PLAYER_SPEED,
     DANMAKU_ON,
@@ -106,6 +109,16 @@ public:
     bool isFirstRun() const;
     void markFirstRunDone();
     void resetFirstRun();  // for "重新走引导" settings entry
+    // v22.2 first-run 输入码 prompt.
+    // shown  — dialog has been presented at least once (don't re-nag).
+    // skipped — user pressed 跳过; remembered across launches.
+    // pending — short (<24 char) code attempt stored for later PKCE paste.
+    bool isFirstRunCodePromptShown() const;
+    void setFirstRunCodePromptShown(bool shown);
+    bool isFirstRunCodeSkipped() const;
+    void setFirstRunCodeSkipped(bool skipped);
+    void setPendingFirstRunCode(const std::string& code);
+    std::string getPendingFirstRunCode() const;
     std::string getBangumiAccessToken() const;
     std::string getBangumiRefreshToken() const;
     int64_t    getBangumiTokenExpiry() const;
@@ -197,6 +210,10 @@ public:
     // the Settings → "重新走引导" button instead of forcing it
     // on every fresh install.
     bool        firstRun_ = false;  // v17.3 onboarding gate
+    // v22.2 first-run login-code prompt state (ani-switch.json).
+    bool        firstRunCodePromptShown_ = false;
+    bool        firstRunCodeSkipped_     = false;
+    std::string pendingFirstRunCode_;
 
     static std::map<SettingItem, ProgramOption> SETTING_MAP;
 };

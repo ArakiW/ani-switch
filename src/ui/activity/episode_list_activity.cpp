@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
+//
+// v22 chrome: title kTypeH2, 88px list rows via chrome::makeListRow,
+// scroll shell + HUD + B 返回. openSourcePicker click logic unchanged.
 
 #include "ui/activity/episode_list_activity.hpp"
+#include "ui/ui_chrome.hpp"
 #include "utils/activity_helper.hpp"
 #include "utils/string_helper.hpp"
 #include "utils/sqlite_store.hpp"
@@ -14,28 +18,22 @@ EpisodeListActivity::EpisodeListActivity(int32_t subjectId, int32_t resumeEpisod
     : subjectId_(subjectId), resumeEpisodeId_(resumeEpisodeId) {}
 
 void EpisodeListActivity::onContentAvailable() {
-    auto* root = new brls::Box();
-    root->setAxis(brls::Axis::COLUMN);
-    root->setPadding(20);
-    auto* title = new brls::Label();
-    title->setText("剧集列表");
-    title->setFontSize(28);
-    title->setMarginBottom(10);
-    root->addView(title);
+    // Padded chrome page as scroll content (replaces XML placeholder).
+    auto* content = chrome::makePageRoot();
+
+    content->addView(chrome::makeTitle("剧集列表", theme::kTypeH2, 8));
+    content->addView(chrome::makeMuted("选择一集 · A 打开播放源 · B 返回", 16));
 
     auto* list = new brls::Box();
     list->setAxis(brls::Axis::COLUMN);
     list->setId("eps_list");
-    root->addView(list);
+    content->addView(list);
     list_ = list;
-    auto* back = new brls::Button();
-    back->setText("返回");
-    back->registerClickAction([](brls::View*) { brls::Application::popActivity(); return true; });
-    root->addView(back);
-    auto* scroll = new brls::ScrollingFrame();
-    scroll->setContentView(root);
-    setContentView(scroll);
-    registerAction("返回", brls::BUTTON_B, [](brls::View*) { brls::Application::popActivity(); return true; });
+
+    // HUD carries B 返回 — drop the ad-hoc footer button.
+    auto* shell = chrome::attachScrollShell(this, content);
+    if (shell) shell->setBackgroundColor(theme::kChromeBg);
+    chrome::registerBack(this);
 
     presenter_.onEpisodes.subscribe([this](std::vector<Episode> e) { render(e); });
     presenter_.onLastWatched.subscribe([this, list](std::optional<SQLiteStore::HistoryEntry> last) {
@@ -46,33 +44,36 @@ void EpisodeListActivity::onContentAvailable() {
     });
     presenter_.setSubjectId(subjectId_);
     presenter_.refresh();
+
+    chrome::finish(this, shell);
 }
 
 void EpisodeListActivity::render(const std::vector<Episode>& eps) {
     if (!list_) return;
     list_->clearViews();
     for (const auto& e : eps) {
-        auto* row = new brls::Box();
-        row->setFocusable(true);
-        row->setAxis(brls::Axis::ROW);
-        row->setMarginBottom(4);
+        auto* row = chrome::makeListRow(theme::kRowHeight);  // 88 · kDarkCardRowBg
 
         auto* idx = new brls::Label();
-        idx->setText(fmt::format("EP{:g}  ", e.sort));
-        idx->setFontSize(18);
-        idx->setMarginRight(8);
+        idx->setText(fmt::format("EP{:g}", e.sort));
+        idx->setFontSize(theme::kTypeH3);
+        idx->setTextColor(theme::kDarkTextSecondary);
+        idx->setMarginRight(12);
         row->addView(idx);
 
         auto* title = new brls::Label();
         title->setText(e.nameCN.empty() ? e.name : e.nameCN);
-        title->setFontSize(18);
+        title->setFontSize(theme::kTypeH3);
+        title->setTextColor(theme::kDarkTextPrimary);
+        title->setSingleLine(true);
         title->setGrow(1.0f);
         row->addView(title);
 
         if (e.duration > 0) {
             auto* dur = new brls::Label();
             dur->setText(format_duration(e.duration));
-            dur->setFontSize(16);
+            dur->setFontSize(theme::kTypeCaption);
+            dur->setTextColor(theme::kDarkTextSecondary);
             row->addView(dur);
         }
 

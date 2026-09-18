@@ -8,12 +8,13 @@
 //   • per-row relative timestamp ("刚刚" / "3 分钟前" / "2 小时前" /
 //     "5 天前")
 //
-// Pure-local: no network, no DB schema change.  Time is sourced
-// from time() once per render and the buckets are recomputed
-// against that, so when the user reaches the page later the
-// "今天" / "本周" cutoff slides forward naturally.
+// v22 chrome: page root (kChromeBg + TV-safe margins), section headers
+// via chrome::makeSection, 88px rows via chrome::makeListRow + focus,
+// scroll shell + HUD + B 返回 / X 清空所有. Grouping / demo / delete
+// / resume logic unchanged. Pure-local: no network, no DB schema change.
 
 #include "ui/activity/history_activity.hpp"
+#include "ui/ui_chrome.hpp"
 #include "ui/theme.hpp"
 #include "ui/hud.hpp"
 #include "ui/demo_data.hpp"
@@ -80,29 +81,20 @@ std::string formatTotalDuration(int64_t totalMs) {
 HistoryActivity::HistoryActivity() = default;
 
 void HistoryActivity::onContentAvailable() {
-    auto* root = new brls::Box();
-    root->setAxis(brls::Axis::COLUMN);
-    root->setPadding(20);
+    // v22: root padding (kSafeMarginTop, kSafeMarginX, kSafeMarginBot,
+    // kSafeMarginX) + kChromeBg via chrome::makePageRoot.
+    auto* content = chrome::makePageRoot();
 
-    auto* title = new brls::Label();
-    title->setText("观看历史");
-    title->setFontSize(theme::kTypeH2);
-    title->setMarginBottom(6);
-    root->addView(title);
+    content->addView(chrome::makeTitle("观看历史", theme::kTypeH2, 6));
 
     // Live summary, updated by render().
     summary_ = new brls::Label();
     summary_->setFontSize(theme::kTypeCaption);
-    summary_->setTextColor(aniswitch::theme::kDarkTextSecondary);
+    summary_->setTextColor(theme::kDarkTextSecondary);
     summary_->setMarginBottom(8);
-    root->addView(summary_);
+    content->addView(summary_);
 
-    clearBtn_ = new brls::Button();
-    clearBtn_->setText("清空所有");
-    clearBtn_->setHeight(theme::kButtonHeight);
-    theme::applyFocusStyle(clearBtn_);
-    clearBtn_->setMarginBottom(12);
-    clearBtn_->registerClickAction([this](brls::View*) {
+    clearBtn_ = chrome::makePrimaryButton("清空所有", [this]() {
         // v17.5: use the single-arg Dialog constructor and add
         // both buttons via addButton() — the 4-arg constructor
         // doesn't exist in borealis 5f08b286.
@@ -114,20 +106,18 @@ void HistoryActivity::onContentAvailable() {
             presenter_.refresh();
         });
         dlg->open();
-        return true;
-    });
-    root->addView(clearBtn_);
+    }, 12);
+    content->addView(clearBtn_);
 
     // List lives in a ScrollingFrame so 100+ entries don't push
     // the title off the screen.
     list_ = new brls::Box();
     list_->setAxis(brls::Axis::COLUMN);
-    root->addView(list_);
+    content->addView(list_);
 
-    auto* scroll = new brls::ScrollingFrame();
-    scroll->setContentView(root);
-    auto* shell = setContentViewWithHudShell(this, scroll);
-    registerAction("返回", brls::BUTTON_B, [](brls::View*) { brls::Application::popActivity(); return true; });
+    auto* shell = chrome::attachScrollShell(this, content);
+    if (shell) shell->setBackgroundColor(theme::kChromeBg);
+    chrome::registerBack(this);
     registerAction("清空所有", brls::BUTTON_X, [this](brls::View*) {
         auto* dlg = new brls::Dialog("确定要清空所有观看历史?  此操作无法恢复。");
         dlg->setCancelable(true);
@@ -139,7 +129,7 @@ void HistoryActivity::onContentAvailable() {
         dlg->open();
         return true;
     });
-    appendHud(this, shell);
+    chrome::finish(this, shell);
 
     presenter_.onHistory.subscribe([this](std::vector<SQLiteStore::HistoryEntry> v) {
         render(v);
@@ -165,12 +155,7 @@ void HistoryActivity::render(std::vector<SQLiteStore::HistoryEntry> v) {
 
     if (v.empty()) {
         // v22 compose-next: empty history → demo rows.
-        auto* banner = new brls::Label();
-        banner->setText(demo::kBanner);
-        banner->setFontSize(theme::kTypeCaption);
-        banner->setTextColor(theme::kDarkTextMuted);
-        banner->setMarginBottom(8);
-        list_->addView(banner);
+        list_->addView(chrome::makeMuted(demo::kBanner, 8));
         v = demo::history();
     }
 
@@ -184,34 +169,18 @@ void HistoryActivity::render(std::vector<SQLiteStore::HistoryEntry> v) {
     }
     for (int i = 0; i < 3; ++i) {
         if (buckets[i].empty()) continue;
-        auto* header = new brls::Box();
-        header->setAxis(brls::Axis::ROW);
-        header->setPadding(0, 0, 0, 6);
-        header->setMarginTop(8);
-        header->setMarginBottom(4);
-        auto* bar = new brls::Rectangle();
-        bar->setSize(brls::Size(20, 2));
-        bar->setColor(aniswitch::theme::kAccent);
-        header->addView(bar);
-        auto* lbl = new brls::Label();
-        lbl->setText(fmt::format("  {} ({} 条)",
-                                 bucketLabel(static_cast<HistoryBucket>(i)),
-                                 buckets[i].size()));
-        lbl->setFontSize(theme::kTypeH3);
-        lbl->setTextColor(aniswitch::theme::kAccent);
-        header->addView(lbl);
-        list_->addView(header);
+
+        // Section header — chrome::makeSection (kTypeH3 + kAccentBright).
+        list_->addView(chrome::makeSection(
+            fmt::format("{} ({} 条)",
+                        bucketLabel(static_cast<HistoryBucket>(i)),
+                        buckets[i].size()),
+            4));
 
         for (const auto* ep : buckets[i]) {
             const auto& e = *ep;
-            auto* row = new brls::Box();
-            row->setFocusable(true);
-            row->setHeight(theme::kRowHeight);
-            row->setPadding(12, 12, 12, 12);
-            theme::applyFocusStyle(row, 8.f);
-            row->setAxis(brls::Axis::ROW);
-            row->setAlignItems(brls::AlignItems::CENTER);
-            row->setMarginBottom(6);
+            // v22 §5.5: 88px elevated row + focus ring.
+            auto* row = chrome::makeListRow(theme::kRowHeight);
 
             // v22 §5.5: 56×84 thumbnail (cover-gated; color block fallback).
             auto* thumb = new brls::Box();
@@ -219,7 +188,7 @@ void HistoryActivity::render(std::vector<SQLiteStore::HistoryEntry> v) {
             thumb->setHeight(84);
             thumb->setCornerRadius(6);
             thumb->setBackground(brls::ViewBackground::SHAPE_COLOR);
-            thumb->setBackgroundColor(nvgRGB(45, 40, 60));
+            thumb->setBackgroundColor(theme::kChromeCard);
             thumb->setMarginRight(12);
             row->addView(thumb);
 
@@ -231,6 +200,7 @@ void HistoryActivity::render(std::vector<SQLiteStore::HistoryEntry> v) {
             title->setText(fmt::format("{} - {}",
                                        e.subjectName, e.episodeName));
             title->setFontSize(theme::kTypeH3);
+            title->setTextColor(theme::kDarkTextPrimary);
             title->setSingleLine(true);
             bodyCol->addView(title);
 
@@ -243,7 +213,7 @@ void HistoryActivity::render(std::vector<SQLiteStore::HistoryEntry> v) {
             }
             meta->setText(metaText);
             meta->setFontSize(theme::kTypeCaption);
-            meta->setTextColor(aniswitch::theme::kDarkTextMuted);
+            meta->setTextColor(theme::kDarkTextMuted);
             bodyCol->addView(meta);
             row->addView(bodyCol);
 
@@ -252,8 +222,10 @@ void HistoryActivity::render(std::vector<SQLiteStore::HistoryEntry> v) {
             int64_t pos = e.positionMs;
             auto path = e.episodeName;
             row->registerClickAction([eid, pos, path, this](brls::View*) {
-                if (eid < 0) {
-                    brls::Application::notify("演示条目，无法播放");
+                if (eid <= 0) {
+                    brls::Application::notify(
+                        eid < 0 ? "演示条目，不进行在线解析（可播本地视频）"
+                                : "历史记录缺少集数 ID，无法解析播放源");
                     return true;
                 }
                 // v22: resume still goes through source picker when

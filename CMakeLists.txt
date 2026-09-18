@@ -361,9 +361,12 @@ set(ANISWITCH_SOURCES
     src/utils/number_helper.cpp
     src/utils/thread_helper.cpp
     src/utils/crash_helper.cpp
+    src/utils/perf_switch.cpp  # v22.1 Switch perf/telemetry helper
+    src/utils/home_led.cpp       # v22.1 HOME LED status indicator
     src/utils/shortcut_helper.cpp
     src/utils/image_helper.cpp
     src/utils/vibration_helper.cpp
+    src/utils/home_led.cpp
     src/utils/version_helper.cpp
     src/utils/sqlite_store.cpp
     # net
@@ -397,6 +400,7 @@ set(ANISWITCH_SOURCES
     src/core/history.cpp
     # player
     src/player/mpv_core.cpp
+    src/player/seamless_hls.cpp
     src/player/danmaku_core.cpp
     src/player/danmaku_renderer.cpp
     src/player/subtitle_core.cpp
@@ -427,6 +431,7 @@ set(ANISWITCH_SOURCES
     src/ui/activity/log_activity.cpp             # v18.8
     src/ui/activity/login_activity.cpp
     src/ui/activity/person_activity.cpp
+    src/ui/nav_stress.cpp
     src/ui/presenter/person_presenter.cpp
     src/ui/fragment/home_recommend.cpp
     src/ui/fragment/home_bangumi.cpp

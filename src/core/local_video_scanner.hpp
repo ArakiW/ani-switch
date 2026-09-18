@@ -31,6 +31,14 @@ struct LocalVideoEntry {
     int64_t     sizeBytes = 0;
     int64_t     mtimeUnix = 0;  // seconds since epoch
     std::string source;     // which root it came from
+    // v22: anime/series grouping key for the local video page.
+    // Derived in the scanner, priority:
+    //   (a) first folder component under the scan root
+    //       (videos/葬送的芙莉莲/ep01.mkv → "葬送的芙莉莲")
+    //   (b) filename prefix before common markers
+    //       (EP/ep/第/ - /【/[) — leading [Group] tags are stripped first
+    //   (c) fallback "未分类"
+    std::string series;
 };
 
 class LocalVideoScanner {

@@ -7,10 +7,21 @@
 
 #pragma once
 
+#include <functional>
 #include <string>
 #include <cstdint>
 
 namespace aniswitch {
+
+// v22.2: first-launch 「输入登录码」 dialog (brls::Dialog + ImeManager).
+// True when there is no Bangumi login, the prompt has not been shown yet,
+// and the user has not remembered a skip.
+bool firstRunLoginCodePromptNeeded();
+
+// Show the prompt. Safe only after the UI stack is up (call from
+// MainActivity / deferred after openMain — never from bare main()).
+// onDone fires after the user inputs or skips (not after async PAT verify).
+void promptFirstRunLoginCode(std::function<void()> onDone = nullptr);
 
 class Intent {
 public:

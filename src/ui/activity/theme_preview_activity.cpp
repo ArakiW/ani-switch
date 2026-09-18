@@ -2,6 +2,8 @@
 
 #include "ui/activity/theme_preview_activity.hpp"
 #include "ui/theme.hpp"
+#include "ui/ui_chrome.hpp"
+#include "ui/hud.hpp"
 #include "utils/activity_helper.hpp"
 #include "utils/config_helper.hpp"
 #include <borealis/core/application.hpp>
@@ -13,7 +15,7 @@ namespace aniswitch {
 namespace {
 
 // Tiny helper: read a token from the active theme, fall back
-// to a neutral grey if the token is missing (e.g. user is on
+// to a theme.hpp token if the key is missing (e.g. user is on
 // a theme variant that didn't register our ani_* extension).
 NVGcolor tokenColor(const char* token, NVGcolor fallback) {
     auto theme = brls::Application::getTheme();
@@ -30,39 +32,54 @@ brls::Rectangle* makeSwatch(NVGcolor color, int size = 28) {
 }
 
 void buildPreviewRow(brls::Box* parent) {
-    // Mirror of the animeko preview: a row of colour swatches
-    // for primary / secondary / tertiary + a small sample card
-    // showing surface / background / on-* text.  The point is
-    // to give the user a visual hint of what the chosen theme
-    // looks like before they commit to it.
+    // Live token swatches — DESIGN.md §3 palette. Fallbacks come from
+    // theme.hpp so a missing ani_* key still shows a sane brand color.
+    parent->addView(chrome::makeSection("颜色 token", 8));
+
     auto* swatches = new brls::Box();
     swatches->setAxis(brls::Axis::ROW);
     swatches->setPadding(0, 0, 0, 8);
     swatches->setMarginBottom(8);
-    swatches->addView(makeSwatch(tokenColor("ani_accent", nvgRGB(255, 105, 120))));
-    swatches->addView(makeSwatch(tokenColor("ani_tag_genre", nvgRGB(60, 80, 120))));
-    swatches->addView(makeSwatch(tokenColor("ani_tag_cast",  nvgRGB(80, 60, 100))));
-    swatches->addView(makeSwatch(tokenColor("ani_tag_meta",  nvgRGB(50, 110, 80))));
-    swatches->addView(makeSwatch(tokenColor("ani_card_highlight",
-                                          nvgRGB(255, 200, 80))));
-    parent->addView(swatches);
+    swatches->setAlignItems(brls::AlignItems::CENTER);
+    swatches->addView(makeSwatch(tokenColor("ani_accent", theme::kAccent)));
+    swatches->addView(makeSwatch(tokenColor("ani_accent_bright", theme::kAccentBright)));
+    swatches->addView(makeSwatch(tokenColor("ani_tag_genre", theme::kTagGenre)));
+    swatches->addView(makeSwatch(tokenColor("ani_tag_cast", theme::kTagCast)));
+    swatches->addView(makeSwatch(tokenColor("ani_tag_meta", theme::kTagMeta)));
+    swatches->addView(makeSwatch(tokenColor("ani_card_highlight", theme::kDarkCardHighlight)));
 
+    auto* swatchLabels = new brls::Box();
+    swatchLabels->setAxis(brls::Axis::ROW);
+    swatchLabels->setMarginBottom(16);
+    const char* names[] = {"accent", "focus", "genre", "cast", "meta", "highlight"};
+    for (const char* n : names) {
+        auto* lbl = chrome::makeMuted(n, 0);
+        lbl->setMarginRight(18);
+        swatchLabels->addView(lbl);
+    }
+    parent->addView(swatches);
+    parent->addView(swatchLabels);
+
+    parent->addView(chrome::makeSection("样例卡片", 8));
+
+    // Sample card on elevated surface — shows on-* ink tokens.
     auto* card = new brls::Box();
     card->setAxis(brls::Axis::COLUMN);
-    card->setPadding(16, 12, 16, 12);
+    card->setPadding(16, 16, 16, 16);
     card->setMarginBottom(20);
-    card->setBackgroundColor(tokenColor("ani_card_bg", nvgRGB(30, 30, 35)));
+    card->setCornerRadius(8);
+    card->setBackground(brls::ViewBackground::SHAPE_COLOR);
+    card->setBackgroundColor(tokenColor("ani_card_bg", theme::kChromeCard));
+#ifdef __SWITCH__
+    card->setWidth(theme::kContentWidth);
+#endif
 
-    auto* cardTitle = new brls::Label();
-    cardTitle->setText("Sample card title");
-    cardTitle->setFontSize(16);
-    cardTitle->setTextColor(tokenColor("ani_text_primary", nvgRGB(240, 240, 240)));
+    auto* cardTitle = chrome::makeTitle("Sample card title", theme::kTypeH3, 4);
+    cardTitle->setTextColor(tokenColor("ani_text_primary", theme::kDarkTextPrimary));
     card->addView(cardTitle);
 
-    auto* cardSub = new brls::Label();
-    cardSub->setText("subtitle text uses ani_text_secondary");
-    cardSub->setFontSize(theme::kTypeCaption);
-    cardSub->setTextColor(tokenColor("ani_text_secondary", nvgRGB(180, 180, 180)));
+    auto* cardSub = chrome::makeCaption("subtitle text uses ani_text_secondary", 0);
+    cardSub->setTextColor(tokenColor("ani_text_secondary", theme::kDarkTextSecondary));
     card->addView(cardSub);
 
     parent->addView(card);
@@ -73,66 +90,53 @@ void buildPreviewRow(brls::Box* parent) {
 ThemePreviewActivity::ThemePreviewActivity() = default;
 
 void ThemePreviewActivity::onContentAvailable() {
-    auto* root = new brls::Box();
-    root->setAxis(brls::Axis::COLUMN);
-    root->setPadding(20, 20, 20, 20);
+    auto* root = chrome::makePageRoot();
 
-    auto* title = new brls::Label();
-    title->setText("主题预览");
-    title->setFontSize(24);
-    title->setMarginBottom(8);
-    root->addView(title);
+    root->addView(chrome::makeTitle("主题预览", theme::kTypeH1, 8));
 
-    auto* cur = new brls::Label();
     const char* variantName =
         brls::Application::getThemeVariant() == brls::ThemeVariant::LIGHT
             ? "亮色" : "暗色";
-    cur->setText(fmt::format("当前: {} ({} tokens)", variantName,
-                              "ani_*"));
-    cur->setFontSize(theme::kTypeCaption);
-    cur->setTextColor(aniswitch::theme::kDarkTextSecondary);
-    cur->setMarginBottom(20);
-    root->addView(cur);
+    root->addView(chrome::makeCaption(
+        fmt::format("当前: {} ({} tokens)", variantName, "ani_*"),
+        20));
 
     buildPreviewRow(root);
 
-    // animeko's DarkModeSelectPanel is a 3-radio group with
-    // live theme previews in the same row.  We collapse the
-    // previews into a single "current" preview above and use
-    // three buttons below for the choices — applying one pops
-    // + pushes a fresh activity so the swatches repaint.
-    auto* hint = new brls::Label();
-    hint->setText("选一个: 立即生效, 屏幕会重新进入以更新预览色块。");
-    hint->setFontSize(theme::kTypeCaption);
-    hint->setTextColor(aniswitch::theme::kDarkTextMuted);
-    hint->setMarginBottom(12);
-    root->addView(hint);
+    // Theme choice chips — animeko DarkModeSelectPanel collapsed to
+    // three choices. Applying one pops + pushes so swatches repaint.
+    root->addView(chrome::makeSection("主题模式", 8));
+    root->addView(chrome::makeMuted(
+        "选一个: 立即生效, 屏幕会重新进入以更新预览色块。",
+        12));
 
-    auto addButton = [root](const std::string& text, int choice) {
-        auto* btn = new brls::Button();
-        btn->setText(text);
-        btn->setMarginBottom(8);
-        btn->registerClickAction(
-            [choice](brls::View*) {
+    const int curChoice =
+        ProgramConfig::instance().getSettingItem<int>(SettingItem::APP_THEME, 0);
+
+    auto* chipRow = new brls::Box();
+    chipRow->setAxis(brls::Axis::ROW);
+    chipRow->setMarginBottom(16);
+
+    auto addChip = [chipRow, curChoice](const std::string& text, int choice) {
+        chipRow->addView(chrome::makeChip(
+            text, choice == curChoice,
+            [choice]() {
                 ProgramConfig::instance().setSettingItem<int>(
                     SettingItem::APP_THEME, choice);
                 aniswitch::theme::applyTheme(
                     aniswitch::theme::themeChoiceFromIndex(choice));
                 brls::Application::popActivity();
                 aniswitch::Intent::openThemePreview();
-                return true;
-            });
-        root->addView(btn);
+            }));
     };
-    addButton("自动 (跟系统)", 0);
-    addButton("亮色",          1);
-    addButton("暗色",          2);
+    addChip("自动 (跟系统)", 0);
+    addChip("亮色", 1);
+    addChip("暗色", 2);
+    root->addView(chipRow);
 
-    setContentView(root);
-    registerAction("返回", brls::BUTTON_B, [](brls::View*) {
-        brls::Application::popActivity();
-        return true;
-    });
+    auto* shell = chrome::attachScrollShell(this, root);
+    chrome::registerBack(this);
+    chrome::finish(this, shell);
 }
 
 }  // namespace aniswitch

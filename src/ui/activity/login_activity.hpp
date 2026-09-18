@@ -18,6 +18,8 @@ public:
     void onContentAvailable() override;
 private:
     std::shared_ptr<int> lifetime_ = std::make_shared<int>(0);
+    brls::Label* status_ = nullptr;
+    std::string statusText_;
 };
 
 }  // namespace aniswitch

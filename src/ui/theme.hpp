@@ -106,6 +106,13 @@ inline const NVGcolor kDarkCardBg        = nvgRGBA(28, 26, 36, 220);
 inline const NVGcolor kDarkCardRowBg     = nvgRGBA(40, 36, 54, 220);
 inline const NVGcolor kDarkCardHighlight = nvgRGBA(167, 139, 250, 255);
 
+// DESIGN.md §3.1 semantic colors (missing from early theme.cpp pass).
+inline const NVGcolor kRating = nvgRGB(255, 200, 80);   // #FFC850
+inline const NVGcolor kError  = nvgRGB(255, 107, 120);  // #FF6B78
+inline const NVGcolor kSuccess = nvgRGB(61, 220, 151);  // #3DDC97
+inline const NVGcolor kWarning = nvgRGB(255, 200, 80);  // #FFC850
+inline const NVGcolor kInfo    = nvgRGB(107, 168, 255); // #6BA8FF
+
 inline const NVGcolor kDarkTextPrimary   = nvgRGB(245, 245, 248);
 inline const NVGcolor kDarkTextSecondary = nvgRGB(185, 185, 195);
 inline const NVGcolor kDarkTextMuted     = nvgRGB(130, 130, 145);

@@ -9,6 +9,8 @@
 #include "player/tsvitch_video_profile.hpp"
 #include "player/tsvitch_video_progress_slider.hpp"
 #include "player/tsvitch_hint_label.hpp"
+#include "player/mpv_core.hpp"
+#include "utils/perf_switch.hpp"
 #include <borealis.hpp>
 #include <filesystem>
 #include <borealis/core/logger.hpp>
@@ -17,6 +19,10 @@
 #include <sstream>
 #include <cstdlib>
 #include <sys/stat.h>
+
+#if defined(__SWITCH__)
+extern "C" void aniswitchStartupLog(const char* message);
+#endif
 
 namespace aniswitch {
 
@@ -35,6 +41,7 @@ std::map<SettingItem, ProgramOption> ProgramConfig::SETTING_MAP = {
     {SettingItem::PLAYER_AUTO_PLAY,       {"playerAutoPlay",       {"off", "on"},                                          {0, 1}, 1}},
     {SettingItem::PLAYER_LOW_QUALITY,     {"playerLowQuality",     {"off", "on"},                                          {0, 1}, 0}},
     {SettingItem::PLAYER_HWDEC,           {"playerHwdec",          {"auto", "off", "on"},                                  {0, 1, 2}, 1}},
+    {SettingItem::PLAYER_STREAM_MODE,     {"playerStreamMode",     {"seamless", "mpv-direct"},                             {0, 1}, 0}},
     {SettingItem::DANMAKU_SMART_MASK,     {"danmakuSmartMask",     {"off", "on"},                                          {0, 1}, 0}},
     {SettingItem::DANMAKU_ON,             {"danmakuOn",            {"off", "on"},                                          {0, 1}, 1}},
     {SettingItem::DANMAKU_FILTER_LEVEL,   {"danmakuFilterLevel",   {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"},     {1,2,3,4,5,6,7,8,9,10}, 1}},
@@ -89,6 +96,61 @@ void ProgramConfig::init() {
     BangumiClient::setAccessToken(hasLoginInfo() ? bangumiAccessToken : "");
     // v20.0: wire the persisted LAN proxy into every cpr session.
     HTTP::applyProxy(httpProxy);
+
+    // v22.1: wire player statics from settings.  Previously these
+    // MPVCore fields were NEVER applied on ani-switch — HARDWARE_DEC
+    // stayed at its compile-time `false`, so first player open on
+    // real device software-decoded inside deko3d and hung/ crashed
+    // (AGENTS.md startup.8 / v20.4+).  TsVitch/wiliwili wire these
+    // in ProgramConfig::init; we do the same.
+    //
+    // Switch policy: force hardware decode ON.  averne/ffmpeg ships
+    // Tegra NVDEC and borealis deko3d path expects it.  The user
+    // toggle (PLAYER_HWDEC auto/off/on) is ignored on Switch for now
+    // because software decode is the known crash path; a future
+    // on-device test can re-enable the toggle.
+    MPVCore::AUTO_PLAY = getBoolOption(SettingItem::PLAYER_AUTO_PLAY);
+    MPVCore::LOW_QUALITY = getBoolOption(SettingItem::PLAYER_LOW_QUALITY);
+    // v22.3 experiment: mpv-direct = wiliwili-style network loadfile.
+    {
+        const int mode = getIntOption(SettingItem::PLAYER_STREAM_MODE);
+        MPVCore::ALLOW_NETWORK_URL = (mode == 1);
+        if (MPVCore::ALLOW_NETWORK_URL) {
+            // Small demuxer cache helps network HLS (wiliwili wiki ~10-20MB).
+            MPVCore::INMEMORY_CACHE = 20;
+#if defined(__SWITCH__)
+            aniswitchStartupLog("PERF: stream mode=mpv-direct allow_net=1 cache=20MB");
+#endif
+        } else {
+            MPVCore::INMEMORY_CACHE = 0;
+#if defined(__SWITCH__)
+            aniswitchStartupLog("PERF: stream mode=seamless allow_net=0");
+#endif
+        }
+    }
+#if defined(__SWITCH__)
+    MPVCore::HARDWARE_DEC = true;
+    MPVCore::PLAYER_HWDEC_METHOD = "auto";
+    // No in-memory demuxer cache: SD stream + 256MB heap + deko3d FBO
+    // already pressure the app budget.  Cache stays off; download-then-
+    // local-mpv keeps the file on sdmc.
+    MPVCore::INMEMORY_CACHE = 0;
+    aniswitchStartupLog("PERF: mpv statics hwdec=on method=auto memCache=0");
+#else
+    {
+        // playerHwdec option list is {"auto","off","on"} raw {0,1,2}.
+        // getBoolOption cannot express "auto" vs "on"; treat raw>0 as on
+        // except when the stored choice is explicitly "off" (raw==1) and
+        // default is "off" — desktop keeps prior behaviour (off unless on).
+        const int raw = getIntOption(SettingItem::PLAYER_HWDEC);
+        MPVCore::HARDWARE_DEC = (raw == 2);  // only explicit "on"
+        if (raw == 0) {
+            // "auto": enable on desktop too (mpv picks a safe method).
+            MPVCore::HARDWARE_DEC = true;
+            MPVCore::PLAYER_HWDEC_METHOD = "auto-safe";
+        }
+    }
+#endif
 }
 
 void ProgramConfig::load() {
@@ -162,6 +224,13 @@ void ProgramConfig::load() {
         } else {
             firstRun_ = false;
         }
+        // v22.2 first-run 输入码 prompt state.
+        firstRunCodePromptShown_ =
+            j.value("firstRunCodePromptShown", false);
+        firstRunCodeSkipped_ =
+            j.value("firstRunCodeSkipped", false);
+        pendingFirstRunCode_ =
+            j.value("pendingFirstRunCode", std::string());
     } catch (const std::exception& e) {
         brls::Logger::error("ProgramConfig::load: damaged config: {}", e.what());
     }
@@ -179,7 +248,33 @@ void ProgramConfig::markFirstRunDone() {
 
 void ProgramConfig::resetFirstRun() {
     firstRun_ = true;
+    // Re-run onboarding should offer the login-code prompt again.
+    firstRunCodePromptShown_ = false;
+    firstRunCodeSkipped_     = false;
+    pendingFirstRunCode_.clear();
     save();
+}
+
+bool ProgramConfig::isFirstRunCodePromptShown() const {
+    return firstRunCodePromptShown_;
+}
+void ProgramConfig::setFirstRunCodePromptShown(bool shown) {
+    firstRunCodePromptShown_ = shown;
+    save();
+}
+bool ProgramConfig::isFirstRunCodeSkipped() const {
+    return firstRunCodeSkipped_;
+}
+void ProgramConfig::setFirstRunCodeSkipped(bool skipped) {
+    firstRunCodeSkipped_ = skipped;
+    save();
+}
+void ProgramConfig::setPendingFirstRunCode(const std::string& code) {
+    pendingFirstRunCode_ = code;
+    save();
+}
+std::string ProgramConfig::getPendingFirstRunCode() const {
+    return pendingFirstRunCode_;
 }
 
 void ProgramConfig::save() {
@@ -211,6 +306,9 @@ void ProgramConfig::save() {
     j["aniUserId"]           = aniUserId;
     j["aniBangumiPat"]       = aniBangumiPat;
     j["firstRun"]            = firstRun_;   // v17.3 onboarding gate
+    j["firstRunCodePromptShown"] = firstRunCodePromptShown_;  // v22.2
+    j["firstRunCodeSkipped"]     = firstRunCodeSkipped_;
+    j["pendingFirstRunCode"]     = pendingFirstRunCode_;
     f << j.dump(2);
 }
 

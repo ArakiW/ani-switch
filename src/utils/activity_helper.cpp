@@ -2,14 +2,107 @@
 // Adapted from xfangfang/wiliwili (GPL-3.0)
 
 #include "utils/activity_helper.hpp"
+#include "utils/config_helper.hpp"
+#include "net/bgm_auth.hpp"
+#include "net/bgm_client.hpp"
 #include <borealis.hpp>
 #include <borealis/core/logger.hpp>
+#include <borealis/core/thread.hpp>
+#include <fmt/format.h>
 
-#if defined(__SWITCH__) && defined(ANISWITCH_SWITCH_DEBUG)
+#if defined(__SWITCH__)
 extern "C" void aniswitchStartupLog(const char* message);
 #endif
 
 namespace aniswitch {
+
+bool firstRunLoginCodePromptNeeded() {
+    auto& c = ProgramConfig::instance();
+    return !c.hasLoginInfo() && !c.isFirstRunCodePromptShown() &&
+           !c.isFirstRunCodeSkipped();
+}
+
+void promptFirstRunLoginCode(std::function<void()> onDone) {
+    if (!firstRunLoginCodePromptNeeded()) {
+        if (onDone) onDone();
+        return;
+    }
+    // Mark shown immediately so cancel/B cannot re-nag every launch.
+    ProgramConfig::instance().setFirstRunCodePromptShown(true);
+
+    auto finish = [onDone]() {
+        if (onDone) onDone();
+    };
+
+    // brls::Dialog + ImeManager (not EditTextDialog — swkbd is unreliable).
+    auto* dlg = new brls::Dialog(
+        "输入登录码\n\nBangumi PAT 或 OAuth code（可跳过）。\n"
+        "长码按 PAT 校验；短码会暂存，需在「账号登录」完成 PKCE。");
+    dlg->setCancelable(true);
+    dlg->addButton("跳过", [finish]() {
+        ProgramConfig::instance().setFirstRunCodeSkipped(true);
+        finish();
+    });
+    dlg->addButton("输入登录码", [finish]() {
+        auto* ime = brls::Application::getImeManager();
+        if (!ime) {
+            brls::Application::notify("系统输入法不可用，可稍后在设置登录");
+            finish();
+            return;
+        }
+        ime->openForText(
+            [finish](std::string code) {
+                auto pos = code.find("code=");
+                if (pos != std::string::npos) code = code.substr(pos + 5);
+                while (!code.empty() && (code.back() == ' ' || code.back() == '\n' ||
+                                         code.back() == '\r' || code.back() == '\t'))
+                    code.pop_back();
+                while (!code.empty() && (code.front() == ' ' || code.front() == '\n' ||
+                                         code.front() == '\r' || code.front() == '\t'))
+                    code.erase(code.begin());
+
+                if (code.empty()) {
+                    ProgramConfig::instance().setFirstRunCodeSkipped(true);
+                    finish();
+                    return;
+                }
+
+                if (code.size() >= 24) {
+                    // PAT — same path as login_activity method 3.
+                    BangumiAuth::verifyPAT(
+                        code,
+                        [code](std::string userId) {
+                            brls::sync([code, userId]() {
+                                auto& cfg = ProgramConfig::instance();
+                                cfg.setBangumiToken(code, "", 0, userId);
+                                BangumiClient::setAccessToken(code);
+                                brls::Application::notify(fmt::format(
+                                    "登录码已保存 · user {}", userId));
+#if defined(__SWITCH__)
+                                {
+                                    std::string m =
+                                        fmt::format("FIRSTRUN: PAT saved user={}", userId);
+                                    aniswitchStartupLog(m.c_str());
+                                }
+#endif
+                            });
+                        },
+                        [](const std::string& msg, int) {
+                            brls::sync([msg]() {
+                                brls::Application::notify("登录码无效: " + msg);
+                            });
+                        });
+                } else {
+                    ProgramConfig::instance().setPendingFirstRunCode(code);
+                    brls::Application::notify(
+                        "已记录短码；PKCE 请到「账号登录」生成链接后粘贴");
+                }
+                finish();
+            },
+            "输入登录码", "Bangumi PAT 或 OAuth code（可跳过）", 255);
+    });
+    dlg->open();
+}
 
 // Forward declarations: actual activities are in src/ui/activity/*.
 namespace ui {

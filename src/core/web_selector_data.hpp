@@ -49,6 +49,8 @@ struct WebSelectorSource {
     int         tier = 99;   // arguments.tier (lower = higher quality, used to sort)
     int         requestIntervalMs = 3000;  // searchConfig.requestInterval
     std::regex  matchVideoUrl;            // searchConfig.matchVideo.matchVideoUrl
+    std::string matchVideoUrlPattern;     // raw pattern; empty = no custom regex
+    bool        hasMatchVideoUrl = false; // true only when pattern compiled
     std::string referer;                 // searchConfig.matchVideo.addHeadersToVideo.referer
     std::string userAgent;               // searchConfig.matchVideo.addHeadersToVideo.userAgent
     std::string cookies;                 // searchConfig.matchVideo.cookies (e.g. "quality=1080")

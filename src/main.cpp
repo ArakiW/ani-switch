@@ -6,6 +6,7 @@
  */
 
 #include <borealis.hpp>
+#include <borealis/core/thread.hpp>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -27,6 +28,7 @@
 #include <filesystem>
 #include "utils/activity_helper.hpp"
 #include "utils/version_helper.hpp"
+#include "utils/perf_switch.hpp"
 #include "player/mpv_core.hpp"
 #include "player/danmaku_core.hpp"
 #include "ui/register_helper.hpp"
@@ -141,6 +143,14 @@ int main(int argc, char* argv[]) {
         }
     }
     startupStage("main: config init done");
+
+    // v22.1: performance / memory telemetry.  Logs PERF: lines into
+    // startup.log (core mask, process + system DRAM, applet performance
+    // mode).  Does NOT enable ApmCpuBoostMode_FastLoad — that mode
+    // throttles the GPU and is banned during playback / network load.
+    startupStage("main: perf init begin");
+    aniswitch::perf::init();
+    startupStage("main: perf init done");
 
     // Periodic Bangumi token refresh (v16.10).
     //
@@ -299,6 +309,16 @@ int main(int argc, char* argv[]) {
             } else {
                 startupStage("main: route main activity");
                 aniswitch::Intent::openMain();
+                // v22.2 first-launch 输入码: deferred until MainActivity
+                // has finished onContentAvailable. Covers the common path
+                // where firstRun_ defaults false (v17.6+) and onboarding
+                // is skipped — user still gets one login-code prompt.
+                if (aniswitch::firstRunLoginCodePromptNeeded()) {
+                    startupStage("main: first-run code prompt armed");
+                    brls::delay(800, []() {
+                        aniswitch::promptFirstRunLoginCode(nullptr);
+                    });
+                }
             }
         } else {
             startupStage("main: route hint activity");

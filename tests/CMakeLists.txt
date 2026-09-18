@@ -206,6 +206,26 @@ target_include_directories(test_sources PRIVATE ${ANISWITCH_ROOT}/src)
 target_link_libraries(test_sources PRIVATE Threads::Threads)
 add_test(NAME sources COMMAND test_sources)
 
+# sources.json HTTP provider — multi-key lookup + soft-fail contract.
+# Compiled with ANISWITCH_NO_CONFIG_HELPER so it does not pull cpr.
+add_executable(test_http_sources
+    test_http_sources.cpp
+    ${ANISWITCH_ROOT}/src/core/http_source.cpp
+)
+target_include_directories(test_http_sources PRIVATE
+    ${ANISWITCH_ROOT}/src
+    ${THIRD_PARTY_DIR}
+    ${BOREALIS_LIBRARY}/include
+    ${BOREALIS_LIBRARY}/include/borealis/extern
+    ${BOREALIS_LIBRARY}/lib/extern/fmt/include
+)
+target_compile_definitions(test_http_sources PRIVATE
+    ANISWITCH_NO_CONFIG_HELPER=1
+    FMT_HEADER_ONLY=1
+)
+target_link_libraries(test_http_sources PRIVATE Threads::Threads)
+add_test(NAME http_sources COMMAND test_http_sources)
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_library(sqlite_devoptab STATIC ${THIRD_PARTY_DIR}/sqlite/sqlite3.c)
     target_compile_definitions(sqlite_devoptab PRIVATE SQLITE_SWITCH_DEVOPTAB SQLITE_OMIT_LOAD_EXTENSION SQLITE_OMIT_WAL)

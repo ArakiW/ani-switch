@@ -143,15 +143,19 @@ void SubjectActivity::onContentAvailable() {
         onSubject(demo::makeDetail(subjectId_, name));
         onEpisodes(demo::episodesFor(subjectId_));
         meta_->setText(demo::kBanner);
-        // v22: online sample — real Bangumi episode + sources.json HTTP.
+        // v22.2: online sample — must use a sources.json **episode** key.
+        // 1227087 = Bangumi ep id for 葬送的芙莉莲 EP1 (subject 400602),
+        // documented working key in dist/sd-aniswitch/sources.json.
+        // The old sample used 1656858 which is NOT in sources.json, so
+        // offline/batch play always hit Bangumi + web-selector and showed
+        // 解析失败.
         auto* playOnline = new brls::Button();
-        playOnline->setText("在线试播 (真实集 ID + HTTP 源)");
+        playOnline->setText("在线试播 (sources.json · 芙莉莲 EP1)");
         playOnline->setHeight(theme::kButtonHeight);
         playOnline->setMarginBottom(6);
         theme::applyFocusStyle(playOnline);
         playOnline->registerClickAction([](brls::View*) {
-            // Frieren ep78 — EpisodeResolver + HTTPSourceProvider.
-            Intent::openPlayer(1656858, "dandanplay", "", 0);
+            Intent::openPlayer(1227087, "sources.json", "", 0);
             return true;
         });
         episodeList_->addView(playOnline);

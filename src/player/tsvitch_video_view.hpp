@@ -52,6 +52,11 @@ public:
     void setPlaybackTime(const std::string& value);
     void setProgress(float value);
     float getProgress();
+    // wiliwili REAL_DURATION: when >0, OSD progress bar total length uses
+    // this (playlist/API duration) instead of mpv's current demuxer duration
+    // (which is short while seamless HLS is still downloading).
+    void setRealDuration(int seconds);
+    int getRealDuration() const;
 
     void setVideoMode();
     void setLiveMode();
@@ -80,6 +85,7 @@ public:
     static View* create();
     void draw(NVGcontext* vg, float x, float y, float width, float height,
               brls::Style style, brls::FrameContext* ctx) override;
+    void onLayout() override;
     View* getDefaultFocus() override;
 
     inline static const std::string SET_TITLE = "SET_TITLE";
@@ -87,12 +93,14 @@ public:
 private:
     aniswitch::MPVCore* mpvCore_ = nullptr;
     bool registerMPVEvent_ = false;
+    bool loggedFirstFrame_ = false;  // v22.1 breadcrumb once
     bool is_osd_shown_ = false;
     bool is_osd_lock_ = false;
     bool closeOnEndOfFile_ = true;
     std::function<void()> onEndCb_;
     std::function<void(bool)> favoriteCb_;
     bool isFavorite_ = false;
+    int real_duration_ = 0;  // seconds; 0 = use mpv duration
     brls::Time osdLastShowTime_ = 0;
     MPVEvent::Subscription eventSubscribeID_;
 

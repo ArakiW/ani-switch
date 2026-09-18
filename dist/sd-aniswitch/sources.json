@@ -1,9 +1,17 @@
-﻿{
+{
+    "_doc": "Keys are Bangumi episode IDs (集数 ID), not subject IDs. Subject-id aliases (e.g. 400602) are optional fallbacks. Path on Switch: sdmc:/switch/aniswitch/sources.json",
     "1227087":  [
                     {
                         "label":  "秋之动漫 · 葬送的芙莉莲 EP1",
                         "url":  "https://c1.rrcdnbf5.com/video/zangsongdefulilian/%E7%AC%AC01%E9%9B%86/index.m3u8",
                         "priority":  10
+                    }
+                ],
+    "400602":  [
+                    {
+                        "label":  "秋之动漫 · 葬送的芙莉莲 EP1 (subject alias)",
+                        "url":  "https://c1.rrcdnbf5.com/video/zangsongdefulilian/%E7%AC%AC01%E9%9B%86/index.m3u8",
+                        "priority":  9
                     }
                 ],
     "1124319":  [

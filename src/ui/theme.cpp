@@ -28,6 +28,15 @@ void registerDarkTheme() {
     dark.addColor("ani_tag_genre",      kTagGenre);
     dark.addColor("ani_tag_cast",       kTagCast);
     dark.addColor("ani_tag_meta",       kTagMeta);
+    // DESIGN.md §3.1 semantic status colors.
+    dark.addColor("ani_rating",         kRating);
+    dark.addColor("ani_error",          kError);
+    dark.addColor("ani_success",        kSuccess);
+    dark.addColor("ani_warning",        kWarning);
+    dark.addColor("ani_info",           kInfo);
+    dark.addColor("ani_ink",            kDarkTextPrimary);
+    dark.addColor("ani_ink_secondary",  kDarkTextSecondary);
+    dark.addColor("ani_ink_muted",      kDarkTextMuted);
     // TsVitch player port: OSD bottom bar accent.
     dark.addColor("color/tsvitch", kAccentBright);
     // v22 P0: TV focus — brand purple ring instead of borealis cyan.

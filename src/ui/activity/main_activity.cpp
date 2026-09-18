@@ -4,7 +4,10 @@
 #include "ui/fragment/home_bangumi.hpp"
 #include "ui/fragment/home_recommend.hpp"
 #include "ui/hud.hpp"
+#include "ui/nav_stress.hpp"
 #include "ui/theme.hpp"
+#include "player/mpv_core.hpp"
+#include "utils/config_helper.hpp"
 #include "net/http.hpp"
 #include "utils/activity_helper.hpp"
 #include <nlohmann/json.hpp>
@@ -218,15 +221,48 @@ void MainActivity::onContentAvailable() {
                 else if (mode == "history") Intent::openHistory();
                 else if (mode == "settings") Intent::openSettings();
                 else if (mode == "subject") Intent::openSubject(-1);
-                else if (mode == "online" || mode == "picker") {
+                else if (mode == "stress" || mode == "stress50") {
+                    int cycles = 50;
+                    if (!line2.empty()) {
+                        int n = 0;
+                        if (sscanf(line2.c_str(), "%d", &n) == 1 && n > 0)
+                            cycles = n;
+                    }
+                    char b[80];
+                    snprintf(b, sizeof(b), "AUTOTOUR: stress cycles=%d", cycles);
+                    aniswitchStartupLog(b);
+                    startNavStress(cycles);
+                }
+                else if (mode == "online" || mode == "picker" || mode == "playtest" ||
+                         mode == "playtestd" || mode == "playtest-direct") {
                     int32_t ep = 1227087, sid = 400602;
                     parseIds(ep, sid);
+                    if (line2.find(' ') != std::string::npos) {
+                        int e = 0, s = 0;
+                        if (sscanf(line2.c_str(), "%d %d", &e, &s) == 2) {
+                            if (e > 0) ep = e;
+                            sid = s;  // allow 0 = no subject hint
+                        }
+                    }
                     {
                         char b2[100];
-                        snprintf(b2, sizeof(b2), "AUTOTOUR: picker ep=%d sid=%d", ep, sid);
+                        snprintf(b2, sizeof(b2), "AUTOTOUR: picker ep=%d sid=%d mode=%s",
+                                 ep, sid, mode.c_str());
                         aniswitchStartupLog(b2);
                     }
-                    Intent::openSourcePicker(ep, sid, "批量测试源", true);
+                    if (mode == "playtest") {
+                        startPlayTest(ep, sid);
+                    } else if (mode == "playtestd" || mode == "playtest-direct") {
+                        // Experiment: force mpv-direct (wiliwili network loadfile).
+                        ProgramConfig::instance().setSettingItem<int>(
+                            SettingItem::PLAYER_STREAM_MODE, 1);
+                        aniswitch::MPVCore::ALLOW_NETWORK_URL = true;
+                        aniswitch::MPVCore::INMEMORY_CACHE = 20;
+                        aniswitchStartupLog("AUTOTOUR: force mpv-direct stream mode");
+                        startPlayTest(ep, sid);
+                    } else {
+                        Intent::openSourcePicker(ep, sid, "批量测试源", true);
+                    }
                 } else if (mode == "player") {
                     Intent::openPlayer(-1, "",
                                        "sdmc:/switch/aniswitch/videos/test-local.mp4",

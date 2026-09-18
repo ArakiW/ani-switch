@@ -35,6 +35,15 @@ public:
     void clearCache();
     std::string cachePathFor(const std::string& url) const;
 
+    // v22.1: pause cover downloads while the player page is open.
+    // Paused worker stops starting new HTTP fetches; pending jobs stay
+    // queued until resume unless clearPending() is also called.
+    void setPaused(bool paused);
+    bool isPaused() const;
+    // Drop every queued job (callbacks fire with ""). Does not stop
+    // an in-flight download.
+    void clearPending();
+
 private:
     ImageLoader();
     ~ImageLoader();
@@ -60,6 +69,7 @@ private:
     std::thread worker_;
     bool running_ = false;
     bool stop_ = false;
+    bool paused_ = false;  // v22.1 player-open gate
 };
 
 }  // namespace aniswitch

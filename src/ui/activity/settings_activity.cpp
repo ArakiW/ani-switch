@@ -1,4 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0
+//
+// v22 chrome polish (structure/logic unchanged):
+//   * scrollBox horizontal pad = theme::kSafeMarginX
+//   * root kChromeBg
+//   * nested group headers → chrome::makeSection (播放/网络/账号/关于/调试)
+//   * buttons height 56 + applyFocusStyle; simple nav via chrome::makePrimaryButton
+//   * NO TabFrame (device crash — permanent flat list)
+//   * HUD path kept: root->addView(buildHudFromActions(getContentView()))
+//
+// ROUTING (v20.11+): Intent::openSettings() → make_setting_activity()
+// (setting_activity.cpp). THIS FILE IS NOT THE LIVE SETTINGS PAGE.
+// Kept compiled + chrome-aligned for a future re-enable; do not delete.
 
 #include "ui/activity/settings_activity.hpp"
 #include "ui/activity/bangumi_sync_activity.hpp"
@@ -8,13 +20,13 @@
 #include "ui/activity/onboarding_activity.hpp"
 #include "ui/theme.hpp"
 #include "ui/hud.hpp"
+#include "ui/ui_chrome.hpp"
 #include "net/http.hpp"
 #include "utils/activity_helper.hpp"
 #include "utils/config_helper.hpp"
 #include "utils/version_helper.hpp"
 #include "utils/vibration_helper.hpp"
 #include <borealis/core/application.hpp>
-#include <borealis/views/tab_frame.hpp>
 #include <borealis/views/scrolling_frame.hpp>
 #include <fmt/format.h>
 
@@ -28,6 +40,8 @@ namespace aniswitch {
 // v18.6: shared helpers that build the four sub-tabs.  Each tab
 // page is just a brls::Box layout — the old flat SettingActivity
 // moved its buttons into one of these.
+// v22: section headers via chrome::makeSection; buttons 56h.
+// Horizontal padding lives on the parent scrollBox (kSafeMarginX).
 // --------------------------------------------------------------------
 
 namespace {
@@ -36,13 +50,10 @@ class AppSettingsPage : public brls::Box {
 public:
     AppSettingsPage() {
         setAxis(brls::Axis::COLUMN);
-        setPadding(20, 20, 20, 20);
+        // Vertical only — scrollBox supplies kSafeMarginX horizontally.
+        setPadding(8, 0, 8, 0);
 
-        auto* header = new brls::Label();
-        header->setText("通用设置");
-        header->setFontSize(theme::kTypeH2);
-        header->setMarginBottom(16);
-        addView(header);
+        addView(chrome::makeTitle("通用设置", theme::kTypeH2, 16));
 
         // v17.0: theme toggle (lifted verbatim from the old
         // SettingActivity).  v18.7 added a separate "主题预览"
@@ -59,6 +70,8 @@ public:
                 idx = static_cast<int>(option.defaultOption);
             themeBtn->setText(fmt::format("主题: {}", option.optionList.at(idx)));
         };
+        themeBtn->setHeight(theme::kButtonHeight);
+        theme::applyFocusStyle(themeBtn);
         themeBtn->setMarginBottom(8);
         themeBtn->registerClickAction(
             [refresh](brls::View*) {
@@ -82,14 +95,9 @@ public:
         // v18.7: jump into the dedicated ThemePreviewActivity so
         // the user can see a row of colour swatches and a sample
         // card before committing to a choice.
-        auto* previewBtn = new brls::Button();
-        previewBtn->setText("主题预览 (色块 + 样卡)");
-        previewBtn->setMarginBottom(8);
-        previewBtn->registerClickAction([](brls::View*) {
+        addView(chrome::makePrimaryButton("主题预览 (色块 + 样卡)", []() {
             aniswitch::Intent::openThemePreview();
-            return true;
-        });
-        addView(previewBtn);
+        }, 8));
 
         // v22 §7.5: focus-tick vibration on/off.
         auto* vibBtn = new brls::Button();
@@ -98,6 +106,7 @@ public:
                                 ? "焦点震动: 开"
                                 : "焦点震动: 关");
         };
+        vibBtn->setHeight(theme::kButtonHeight);
         vibBtn->setMarginBottom(8);
         theme::applyFocusStyle(vibBtn);
         vibBtn->registerClickAction([refreshVib](brls::View*) {
@@ -111,12 +120,15 @@ public:
         // Player + danmaku toggles — duplicated from the old
         // SettingActivity.  v18.7 will collapse them into a
         // dedicated PlayerSettings + DanmakuSettings sub-page.
+        chrome::addSectionHeader(this, "播放", "硬件解码 / 弹幕 / OpenCC");
         for (SettingItem item : {SettingItem::PLAYER_HWDEC,
                                 SettingItem::DANMAKU_ON,
                                 SettingItem::OPENCC_ON}) {
             const auto opt = cfg.getOptionData(item);
             auto* btn = new brls::Button();
+            btn->setHeight(theme::kButtonHeight);
             btn->setMarginBottom(8);
+            theme::applyFocusStyle(btn);
             auto refreshItem = [btn, opt, item]() {
                 int idx = ProgramConfig::instance()
                               .getSettingItem<int>(item, static_cast<int>(opt.defaultOption));
@@ -137,12 +149,7 @@ public:
         }
 
         // ---- v20.0: LAN HTTP/SOCKS proxy (Clash Allow LAN) ----
-        auto* netHeader = new brls::Label();
-        netHeader->setText("网络代理");
-        netHeader->setFontSize(theme::kTypeH3);
-        netHeader->setMarginTop(16);
-        netHeader->setMarginBottom(8);
-        addView(netHeader);
+        chrome::addSectionHeader(this, "网络", "Clash Allow LAN 代理");
 
         auto* proxyBtn = new brls::Button();
         auto* proxyStatus = new brls::Label();
@@ -156,6 +163,8 @@ public:
             proxyStatus->setText(HTTP::proxyHint());
         };
         refreshProxy();
+        proxyBtn->setHeight(theme::kButtonHeight);
+        theme::applyFocusStyle(proxyBtn);
         proxyBtn->setMarginBottom(8);
         proxyBtn->registerClickAction([refreshProxy](brls::View*) {
             auto* ime = brls::Application::getImeManager();
@@ -171,15 +180,10 @@ public:
         addView(proxyBtn);
         addView(proxyStatus);
 
-        auto* clearProxy = new brls::Button();
-        clearProxy->setText("清除代理 (改回直连)");
-        clearProxy->setMarginBottom(8);
-        clearProxy->registerClickAction([refreshProxy](brls::View*) {
+        addView(chrome::makePrimaryButton("清除代理 (改回直连)", [refreshProxy]() {
             ProgramConfig::instance().setProxy("");
             refreshProxy();
-            return true;
-        });
-        addView(clearProxy);
+        }, 8));
 
         auto* proxyHelp = new brls::Label();
         proxyHelp->setText(
@@ -187,7 +191,7 @@ public:
             "填 http://<电脑局域网IP>:7897。有代理时跳过 raw DNS。");
         proxyHelp->setFontSize(theme::kTypeCaption);
         proxyHelp->setSingleLine(false);
-        proxyHelp->setTextColor(aniswitch::theme::kDarkTextSecondary);
+        proxyHelp->setTextColor(theme::kDarkTextSecondary);
         addView(proxyHelp);
     }
 };
@@ -196,33 +200,23 @@ class AccountPage : public brls::Box {
 public:
     AccountPage() {
         setAxis(brls::Axis::COLUMN);
-        setPadding(20, 20, 20, 20);
+        setPadding(8, 0, 8, 0);
 
-        auto* header = new brls::Label();
-        header->setText("Bangumi 同步");
-        header->setFontSize(theme::kTypeH2);
-        header->setMarginBottom(8);
-        addView(header);
+        chrome::addSectionHeader(this, "账号", "Bangumi OAuth / 同步 / 邮箱");
+        addView(chrome::makeTitle("Bangumi 同步", theme::kTypeH2, 8));
 
         auto& cfg = ProgramConfig::instance();
         auto* info = new brls::Label();
         info->setText(fmt::format("已登录: {}",
                                   cfg.hasLoginInfo() ? "是" : "否"));
         info->setFontSize(theme::kTypeCaption);
-        info->setTextColor(aniswitch::theme::kDarkTextSecondary);
+        info->setTextColor(theme::kDarkTextSecondary);
         info->setMarginBottom(20);
         addView(info);
 
         auto addButton = [this](const std::string& text,
                                 std::function<void()> action) {
-            auto* btn = new brls::Button();
-            btn->setText(text);
-            btn->setMarginBottom(8);
-            btn->registerClickAction([action](brls::View*) {
-                action();
-                return true;
-            });
-            addView(btn);
+            addView(chrome::makePrimaryButton(text, std::move(action), 8));
         };
 
         addButton("Bangumi OAuth 登录 / 重新登录", [] {
@@ -241,21 +235,19 @@ class AboutPage : public brls::Box {
 public:
     AboutPage() {
         setAxis(brls::Axis::COLUMN);
-        setPadding(20, 20, 20, 20);
+        setPadding(8, 0, 8, 0);
+
+        chrome::addSectionHeader(this, "关于", "版本 / 许可 / 致谢");
 
         auto& ver = APPVersion::instance();
-        auto* title = new brls::Label();
-        title->setText("ani-switch");
-        title->setFontSize(theme::kTypeH1);
-        title->setMarginBottom(4);
-        addView(title);
+        addView(chrome::makeTitle("ani-switch", theme::kTypeH1, 4));
 
         auto* verLbl = new brls::Label();
         verLbl->setText(fmt::format("v{} ({})",
                                     ver.getVersionStr(),
                                     ver.getPlatform()));
         verLbl->setFontSize(theme::kTypeCaption);
-        verLbl->setTextColor(aniswitch::theme::kAccent);
+        verLbl->setTextColor(theme::kAccent);
         verLbl->setMarginBottom(20);
         addView(verLbl);
 
@@ -265,7 +257,7 @@ public:
             "源代码: GPL-3.0 / AGPL-3.0 (见 THIRD_PARTY_LICENSES.md)");
         build->setFontSize(theme::kTypeCaption);
         build->setSingleLine(false);
-        build->setTextColor(aniswitch::theme::kDarkTextSecondary);
+        build->setTextColor(theme::kDarkTextSecondary);
         build->setMarginBottom(20);
         addView(build);
 
@@ -281,6 +273,7 @@ public:
             "  • borealis (natinusala) — Switch UI 渲染层");
         ack->setFontSize(theme::kTypeCaption);
         ack->setSingleLine(false);
+        ack->setTextColor(theme::kDarkTextSecondary);
         ack->setMarginBottom(20);
         addView(ack);
     }
@@ -290,13 +283,10 @@ class DebugPage : public brls::Box {
 public:
     DebugPage() {
         setAxis(brls::Axis::COLUMN);
-        setPadding(20, 20, 20, 20);
+        setPadding(8, 0, 8, 0);
 
-        auto* title = new brls::Label();
-        title->setText("调试");
-        title->setFontSize(theme::kTypeH2);
-        title->setMarginBottom(8);
-        addView(title);
+        chrome::addSectionHeader(this, "调试", "startup.log 路径 / 崩溃反馈");
+        addView(chrome::makeTitle("调试", theme::kTypeH2, 8));
 
         auto* info = new brls::Label();
         info->setText(
@@ -308,7 +298,7 @@ public:
             "  ani-switch-sd-v11.zip 一起发给开发者。");
         info->setFontSize(theme::kTypeCaption);
         info->setSingleLine(false);
-        info->setTextColor(aniswitch::theme::kDarkTextSecondary);
+        info->setTextColor(theme::kDarkTextSecondary);
         info->setMarginBottom(20);
         addView(info);
 
@@ -316,14 +306,9 @@ public:
         // reads startup.log into a scrollable label, lets the
         // user re-read after the run, and offers a guarded
         // "清空" button.
-        auto* openLog = new brls::Button();
-        openLog->setText("查看 startup.log 完整内容");
-        openLog->setMarginBottom(8);
-        openLog->registerClickAction([](brls::View*) {
+        addView(chrome::makePrimaryButton("查看 startup.log 完整内容", []() {
             aniswitch::Intent::openLog();
-            return true;
-        });
-        addView(openLog);
+        }, 8));
     }
 };
 
@@ -338,20 +323,22 @@ void SettingsActivity::onContentAvailable() {
     auto* root = new brls::Box();
     root->setAxis(brls::Axis::COLUMN);
     root->setPadding(0);
+    root->setBackgroundColor(theme::kChromeBg);
+#ifdef __SWITCH__
+    root->setWidth(theme::kDesignWidth);
+#endif
 
     // v20.9: flat scrolling list instead of TabFrame.
+    // v22: horizontal pad = kSafeMarginX (48 on TV).
     auto* scrollBox = new brls::Box();
     scrollBox->setAxis(brls::Axis::COLUMN);
-    scrollBox->setPadding(20, 16, 20, 20);
+    scrollBox->setPadding(20, theme::kSafeMarginX, 40, theme::kSafeMarginX);
 #ifdef __SWITCH__
     scrollBox->setWidth(theme::kDesignWidth);
 #endif
+    scrollBox->setBackgroundColor(theme::kChromeBg);
 
-    auto* title = new brls::Label();
-    title->setText("设置");
-    title->setFontSize(theme::kTypeH2);
-    title->setMarginBottom(16);
-    scrollBox->addView(title);
+    scrollBox->addView(chrome::makeTitle("设置", theme::kTypeH2, 16));
 
 #ifdef __SWITCH__
     aniswitchStartupLog("SETTINGS: build AppSettingsPage");
@@ -373,27 +360,19 @@ void SettingsActivity::onContentAvailable() {
     aniswitchStartupLog("SETTINGS: pages done");
 #endif
 
-    auto* localBtn = new brls::Button();
-    localBtn->setText("本地视频 (sdmc:/switch/aniswitch/videos/)");
-    localBtn->setMarginTop(12);
-    localBtn->setMarginBottom(8);
-    localBtn->registerClickAction([](brls::View*) {
-        aniswitch::Intent::openLocalVideo();
-        return true;
-    });
-    scrollBox->addView(localBtn);
-    auto* onboardBtn = new brls::Button();
-    onboardBtn->setText("重新走引导 (5 步 onboarding)");
-    onboardBtn->setMarginBottom(8);
-    onboardBtn->registerClickAction([](brls::View*) {
-        aniswitch::Intent::openOnboarding();
-        return true;
-    });
-    scrollBox->addView(onboardBtn);
+    scrollBox->addView(chrome::makePrimaryButton(
+        "本地视频 (sdmc:/switch/aniswitch/videos/)",
+        []() { aniswitch::Intent::openLocalVideo(); }, 8));
+    scrollBox->addView(chrome::makePrimaryButton(
+        "重新走引导 (5 步 onboarding)",
+        []() { aniswitch::Intent::openOnboarding(); }, 8));
 
     auto* scroll = new brls::ScrollingFrame();
     scroll->setContentView(scrollBox);
     scroll->setGrow(1.0f);
+#ifdef __SWITCH__
+    scroll->setWidth(theme::kDesignWidth);
+#endif
     root->addView(scroll);
 
     setContentView(root);
@@ -401,7 +380,7 @@ void SettingsActivity::onContentAvailable() {
         brls::Application::popActivity();
         return true;
     });
-    // v22 §6.4: HUD from ActionMap.
+    // v22 §6.4: HUD from ActionMap — keep this path (not TabFrame shell).
     root->addView(buildHudFromActions(this->getContentView()));
 #if defined(__SWITCH__)
     aniswitchStartupLog("SETTINGS: onContentAvailable done");

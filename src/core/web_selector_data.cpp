@@ -32,10 +32,15 @@ bool WebSelectorData::parse(const std::string& json, WebSelectorData& out) {
                 const auto& mv = sc["matchVideo"];
                 try {
                     const std::string re = mv.value("matchVideoUrl", std::string{});
-                    if (!re.empty()) s.matchVideoUrl = std::regex(re, std::regex::ECMAScript | std::regex::optimize);
+                    if (!re.empty()) {
+                        s.matchVideoUrl = std::regex(re, std::regex::ECMAScript | std::regex::optimize);
+                        s.matchVideoUrlPattern = re;
+                        s.hasMatchVideoUrl = true;
+                    }
                 } catch (const std::regex_error&) {
-                    // Bad regex from upstream — skip just that source.
-                    continue;
+                    // Bad regex from upstream — keep the source and fall
+                    // back to the generic playerJsonUrl extractor.
+                    s.hasMatchVideoUrl = false;
                 }
                 if (mv.contains("addHeadersToVideo")) {
                     s.referer   = mv["addHeadersToVideo"].value("referer",   std::string{});

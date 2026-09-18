@@ -151,9 +151,12 @@ void ImageLoader::loop() {
         Job job;
         {
             std::unique_lock<std::mutex> lock(mu_);
-            cv_.wait(lock, [this]() { return stop_ || !queue_.empty(); });
+            // v22.1: while paused (player open), do not start downloads.
+            cv_.wait(lock, [this]() {
+                return stop_ || (!paused_ && !queue_.empty());
+            });
             if (stop_ && queue_.empty()) return;
-            if (queue_.empty()) continue;
+            if (paused_ || queue_.empty()) continue;
             job = std::move(queue_.front());
             queue_.pop_front();
         }
@@ -261,6 +264,48 @@ void ImageLoader::clearCache() {
     std::error_code ec;
     std::filesystem::remove_all(cacheDir_, ec);
     std::filesystem::create_directories(cacheDir_, ec);
+}
+
+void ImageLoader::setPaused(bool paused) {
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        if (paused_ == paused) return;
+        paused_ = paused;
+#if defined(__SWITCH__)
+        {
+            char b[80];
+            snprintf(b, sizeof(b), "PERF: image-loader paused=%d",
+                     paused ? 1 : 0);
+            aniswitchStartupLog(b);
+        }
+#endif
+    }
+    cv_.notify_all();
+}
+
+bool ImageLoader::isPaused() const {
+    std::lock_guard<std::mutex> lock(mu_);
+    return paused_;
+}
+
+void ImageLoader::clearPending() {
+    std::deque<Job> dropped;
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        dropped.swap(queue_);
+        queued_.clear();
+#if defined(__SWITCH__)
+        {
+            char b[80];
+            snprintf(b, sizeof(b), "PERF: image-loader clearPending n=%zu",
+                     dropped.size());
+            aniswitchStartupLog(b);
+        }
+#endif
+    }
+    for (auto& job : dropped) {
+        if (job.cb) job.cb("");
+    }
 }
 
 }  // namespace aniswitch

@@ -382,6 +382,13 @@ public:
     // 此变量为真时，加载结束后自动播放视频
     inline static bool AUTO_PLAY = true;
 
+    // Progressive HLS / seamless ani:// — do not playlist-clear on load.
+    inline static bool HLS_PROGRESSIVE = false;
+    inline static bool KEEP_PLAYLIST = false;
+    // v22.3 experiment: allow mpv to load http(s) URLs (wiliwili-style).
+    // Default false — Switch DNS/Clash often breaks mpv's resolver.
+    inline static bool ALLOW_NETWORK_URL = false;
+
     // 若值大于0 则当前时间大于 CLOSE_TIME 时，自动暂停播放
     inline static size_t CLOSE_TIME = 0;
 

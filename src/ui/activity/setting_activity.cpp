@@ -3,9 +3,18 @@
 // ani-switch PATCH (2026-09-05): vendored borealis 5f08b286 doesn't have
 // brls::Toggle (it's a newer API). Replace the toggle rows with simple
 // Button rows that flip the underlying config item on each click.
+//
+// v22 chrome: kChromeBg root, kSafeMarginX pad, chrome::makeSection groups
+// (播放/网络/账号/关于), buttons 56h + applyFocusStyle / makePrimaryButton,
+// scroll shell + HUD + B 返回. All settings logic unchanged.
+//
+// ROUTING: this is the LIVE settings screen (Intent::openSettings →
+// make_setting_activity since v20.11). SettingsActivity is the unused
+// multi-page twin kept for a future re-enable.
 
 #include "ui/activity/setting_activity.hpp"
 #include "ui/theme.hpp"
+#include "ui/ui_chrome.hpp"
 #include "net/http.hpp"
 #include "utils/activity_helper.hpp"
 #include "utils/config_helper.hpp"
@@ -90,64 +99,43 @@ void SettingActivity::onContentAvailable() {
     SET_TRACE("SET: begin");
     auto& cfg = ProgramConfig::instance();
 
-    auto* root = new brls::Box();
-    root->setAxis(brls::Axis::COLUMN);
-    root->setPadding(16, theme::kSafeMarginX, 24, theme::kSafeMarginX);
+    auto* content = chrome::makePageRoot();
 
-    auto* header = new brls::Box();
-    header->setAxis(brls::Axis::COLUMN);
-    header->setHeight(72);
-    header->setMarginBottom(12);
-    auto* title = new brls::Label();
-    title->setText("设置");
-    title->setFontSize(theme::kTypeH2);
-    title->setSingleLine(true);
-    title->setHeight(36);
-    header->addView(title);
+    // Header — title kTypeH2 + auth caption.
+    content->addView(chrome::makeTitle("设置", theme::kTypeH2, 4));
     auto* authLabel = new brls::Label();
     authLabel->setText(cfg.hasLoginInfo()
         ? fmt::format("已登录: user {}", cfg.getUserID())
         : "未登录");
-    authLabel->setFontSize(theme::kTypeH3);
-    authLabel->setSingleLine(true);
-    authLabel->setHeight(32);
-    header->addView(authLabel);
-    root->addView(header);
+    authLabel->setFontSize(theme::kTypeCaption);
+    authLabel->setTextColor(theme::kDarkTextSecondary);
+    authLabel->setMarginBottom(16);
+    content->addView(authLabel);
 
-    auto* btnLogin = new brls::Button();
-    btnLogin->setText(cfg.hasLoginInfo() ? "重新登录" : "登录 Bangumi");
-    btnLogin->setHeight(theme::kButtonHeight);
-    theme::applyFocusStyle(btnLogin);
-    btnLogin->setMarginBottom(20);
-    btnLogin->registerClickAction([](brls::View*) {
-        Intent::openLogin();
-        return true;
-    });
-    root->addView(btnLogin);
-
-    // Player toggles (Button-as-toggle stand-in)
-    root->addView(makeToggleButton(SettingItem::PLAYER_HWDEC,        "硬件解码",      cfg));
-    root->addView(makeToggleButton(SettingItem::DANMAKU_ON,         "启用弹幕",      cfg));
-
+    // ---- 播放 ----
+    chrome::addSectionHeader(content, "播放", "硬件解码 / 弹幕 / 加载方式 / 主题");
+    content->addView(makeToggleButton(SettingItem::PLAYER_HWDEC, "硬件解码", cfg));
+    content->addView(makeToggleButton(SettingItem::DANMAKU_ON,   "启用弹幕", cfg));
+    // v22.3 experiment: seamless (ani:// local) vs mpv-direct (wiliwili).
+    content->addView(makeToggleButton(
+        SettingItem::PLAYER_STREAM_MODE, "在线加载(无缝/直连)", cfg));
+    content->addView(chrome::makeMuted(
+        "seamless=应用下载后单流播放(稳) · mpv-direct=mpv 直连 m3u8(需代理/DNS 可用)",
+        8));
     // v17.0: theme switcher.  Sits next to the player toggles so
     // it's easy to find without making a separate "appearance"
     // sub-screen.  applyTheme() inside the click handler does
     // the live re-skin; ProgramConfig::save() persists the
     // choice on disk.
-    root->addView(makeThemeButton(cfg));
+    content->addView(makeThemeButton(cfg));
 
-    // v20.11: LAN HTTP proxy (Clash Allow LAN on the PC).
-    auto* proxyLabel = new brls::Label();
-    proxyLabel->setText("网络代理");
-    proxyLabel->setFontSize(theme::kTypeH3);
-    proxyLabel->setSingleLine(true);
-    proxyLabel->setMarginTop(16);
-    proxyLabel->setMarginBottom(8);
-    root->addView(proxyLabel);
+    // ---- 网络 ----
+    chrome::addSectionHeader(content, "网络", "Clash Allow LAN 代理");
 
     auto* proxyBtn = new brls::Button();
     auto* proxyHint = new brls::Label();
     proxyHint->setFontSize(theme::kTypeCaption);
+    proxyHint->setTextColor(theme::kDarkTextSecondary);
     proxyHint->setSingleLine(false);
     proxyHint->setMarginBottom(8);
     auto refreshProxy = [proxyBtn, proxyHint]() {
@@ -171,93 +159,59 @@ void SettingActivity::onContentAvailable() {
             "HTTP 代理", "http://192.168.0.122:7897", 128);
         return true;
     });
-    root->addView(proxyBtn);
-    root->addView(proxyHint);
-    auto* clearProxy = new brls::Button();
-    clearProxy->setText("清除代理 (改回直连)");
-    clearProxy->setHeight(theme::kButtonHeight);
-    theme::applyFocusStyle(clearProxy);
-    clearProxy->setMarginBottom(8);
-    clearProxy->registerClickAction([refreshProxy](brls::View*) {
+    content->addView(proxyBtn);
+    content->addView(proxyHint);
+    content->addView(chrome::makePrimaryButton("清除代理 (改回直连)", [refreshProxy]() {
         ProgramConfig::instance().setProxy("");
         refreshProxy();
-        return true;
-    });
-    root->addView(clearProxy);
+    }, 8));
 
-    // About
+    // ---- 账号 ----
+    chrome::addSectionHeader(content, "账号", "Bangumi OAuth / 同步 / 邮箱登录");
+    content->addView(chrome::makePrimaryButton(
+        cfg.hasLoginInfo() ? "重新登录" : "登录 Bangumi",
+        []() { Intent::openLogin(); }, 8));
+    content->addView(chrome::makePrimaryButton("Bangumi 同步", []() {
+        aniswitch::Intent::openBangumiSync();
+    }, 8));
+    content->addView(chrome::makePrimaryButton("邮箱登录 (ani)", []() {
+        aniswitch::Intent::openEmailLoginStart();
+    }, 8));
+
+    // ---- 关于 / 引导 ----
+    chrome::addSectionHeader(content, "关于", "版本 / 引导 / 本地视频");
     auto* ver = new brls::Label();
     ver->setText(fmt::format("ani-switch {} ({})",
                              APPVersion::instance().getVersionStr(),
                              APPVersion::instance().getPlatform()));
     ver->setFontSize(theme::kTypeCaption);
-    ver->setMarginTop(20);
-    root->addView(ver);
+    ver->setTextColor(theme::kDarkTextSecondary);
+    ver->setMarginBottom(8);
+    content->addView(ver);
 
     // v17.3: re-run onboarding.  Resets the first-run gate so
     // the next startup (or this current push) shows the 5-step
     // welcome again.  Useful for users who skipped it the first
     // time and want to discover features.
-    auto* btnOnboard = new brls::Button();
-    btnOnboard->setText("重新走引导");
-    btnOnboard->setHeight(theme::kButtonHeight);
-    theme::applyFocusStyle(btnOnboard);
-    btnOnboard->setMarginTop(16);
-    btnOnboard->registerClickAction([](brls::View*) {
+    content->addView(chrome::makePrimaryButton("重新走引导", []() {
         ProgramConfig::instance().resetFirstRun();
         brls::Application::popActivity(
             brls::TransitionAnimation::FADE,
             []() { aniswitch::Intent::openOnboarding(); });
-        return true;
-    });
-    root->addView(btnOnboard);
+    }, 8));
 
     // v17.4: local video browser.  Scans the SD card for media
     // files and lets the user play them through the existing
     // PlayerActivity.  Pure filesystem, no network.
-    auto* btnLocal = new brls::Button();
-    btnLocal->setText("本地视频");
-    btnLocal->setHeight(theme::kButtonHeight);
-    theme::applyFocusStyle(btnLocal);
-    btnLocal->setMarginTop(8);
-    btnLocal->registerClickAction([](brls::View*) {
+    content->addView(chrome::makePrimaryButton("本地视频", []() {
         aniswitch::Intent::openLocalVideo();
-        return true;
-    });
-    root->addView(btnLocal);
+    }, 8));
 
-    // v18.4: Bangumi OAuth sync page (BangumiSyncTab from
-    // animeko 6.1.0).  Shows current access/refresh token
-    // state and a manual refresh + sign-out button.
-    auto* btnSync = new brls::Button();
-    btnSync->setText("Bangumi 同步");
-    btnSync->setHeight(theme::kButtonHeight);
-    theme::applyFocusStyle(btnSync);
-    btnSync->setMarginTop(8);
-    btnSync->registerClickAction([](brls::View*) {
-        aniswitch::Intent::openBangumiSync();
-        return true;
-    });
-    root->addView(btnSync);
-
-    // v18.5: ani server email-OTP login (EmailLoginStartScreen +
-    // EmailLoginVerifyScreen from animeko 6.1.0).  Two steps in
-    // one activity; an email round-trip then a 6-digit OTP.
-    auto* btnEmail = new brls::Button();
-    btnEmail->setText("邮箱登录 (ani)");
-    btnEmail->setHeight(theme::kButtonHeight);
-    theme::applyFocusStyle(btnEmail);
-    btnEmail->setMarginTop(8);
-    btnEmail->registerClickAction([](brls::View*) {
-        aniswitch::Intent::openEmailLoginStart();
-        return true;
-    });
-    root->addView(btnEmail);
-
-    auto* scroll = new brls::ScrollingFrame();
-    scroll->setContentView(root);
-    setContentView(scroll);
-    registerAction("返回", brls::BUTTON_B, [](brls::View*) { brls::Application::popActivity(); return true; });
+    auto* shell = chrome::attachScrollShell(this, content);
+    if (shell) shell->setBackgroundColor(theme::kChromeBg);
+    chrome::registerBack(this);
+    SET_TRACE("SET: hud");
+    chrome::finish(this, shell);
     SET_TRACE("SET: done");
 }
 

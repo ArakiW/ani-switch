@@ -13,6 +13,8 @@
 #include "utils/config_helper.hpp"
 #include "utils/number_helper.hpp"
 #include "utils/crash_helper.hpp"
+#include "utils/home_led.hpp"
+#include "player/seamless_hls.hpp"
 #include "player/mpv_core.hpp"
 
 #if defined(__SWITCH__) && defined(ANISWITCH_SWITCH_DEBUG)
@@ -313,9 +315,20 @@ MPVCore::MPVCore() {
 void MPVCore::init() {
     playbackTrace("player: mpv init begin");
     setlocale(LC_NUMERIC, "C");
+    playbackTrace("player: mpv create begin");
     this->mpv = mpvCreate();
     if (!mpv) {
+        playbackTrace("player: mpv create FAILED (null handle)");
         brls::fatal("Error Create mpv Handle");
+    }
+    playbackTrace("player: mpv create done");
+    {
+        char b[96];
+        snprintf(b, sizeof(b),
+                 "player: mpv statics hwdec=%d method=%s memCache=%d",
+                 HARDWARE_DEC ? 1 : 0, PLAYER_HWDEC_METHOD.c_str(),
+                 INMEMORY_CACHE);
+        playbackTrace(b);
     }
     std::string confDir = ProgramConfig::instance().getConfigDir();
     // misc
@@ -406,9 +419,14 @@ void MPVCore::init() {
     }
 
     if (mpvInitialize(mpv) < 0) {
+        playbackTrace("player: mpv init FAILED (mpv_initialize)");
         mpvTerminateDestroy(mpv);
         brls::fatal("Could not initialize mpv context");
     }
+    playbackTrace("player: mpv initialize done");
+
+    // Seamless HLS custom protocol (wiliwili-style single stream).
+    SeamlessHls::registerProtocol(mpv);
 
     // set observe properties
     check_error(mpvObserveProperty(mpv, 1, "core-idle", MPV_FORMAT_FLAG));
@@ -506,10 +524,13 @@ void MPVCore::init() {
                               {MPV_RENDER_PARAM_INVALID, nullptr}};
 #endif
 
+    playbackTrace("player: mpv render create begin");
     if (mpvRenderContextCreate(&mpv_context, mpv, params) < 0) {
+        playbackTrace("player: mpv render create FAILED");
         mpvTerminateDestroy(mpv);
         brls::fatal("failed to initialize mpv GL context");
     }
+    playbackTrace("player: mpv render create done");
 #ifdef BOREALIS_USE_D3D11
     wiliwili::initCrashDump();
 #endif
@@ -560,7 +581,11 @@ MPVCore::~MPVCore() = default;
 #endif
 
 void MPVCore::clean() {
-    if (!mpv) return;
+    if (!mpv) {
+        playbackTrace("player: mpv clean (already null)");
+        return;
+    }
+    playbackTrace("player: mpv clean begin");
     mpvSetWakeupCallback(mpv, nullptr, nullptr);
     if (mpv_context) mpvRenderContextSetUpdateCallback(mpv_context, nullptr, nullptr);
     check_error(mpvCommandString(this->mpv, "quit"));
@@ -581,6 +606,7 @@ void MPVCore::clean() {
         mpvTerminateDestroy(this->mpv);
         this->mpv = nullptr;
     }
+    playbackTrace("player: mpv clean done");
 }
 
 void MPVCore::restart() {
@@ -951,13 +977,18 @@ void MPVCore::eventMainLoop() {
             case MPV_EVENT_FILE_LOADED:
                 playbackTrace("player: file loaded");
                 brls::Logger::info("========> MPV_EVENT_FILE_LOADED");
+                homeLedSetOk();
                 // event 8: 文件预加载结束，准备解码
                 mpvCoreEvent.fire(MpvEventEnum::MPV_LOADED);
                 // 发布一次进度更新事件，避免进度条在0秒时没有进度更新
                 video_progress = 0;
                 mpvCoreEvent.fire(MpvEventEnum::UPDATE_PROGRESS);
-                // 移除其他备用链接
-                command_async("playlist-clear");
+                // wiliwili: clear backup CDN URLs only after primary loads.
+                // Never clear during progressive HLS / ani:// seamless —
+                // that wiped appended segments and caused stalls.
+                if (!HLS_PROGRESSIVE && !KEEP_PLAYLIST) {
+                    command_async("playlist-clear");
+                }
 
                 if (AUTO_PLAY) {
                     mpvCoreEvent.fire(MpvEventEnum::MPV_RESUME);
@@ -970,6 +1001,7 @@ void MPVCore::eventMainLoop() {
             case MPV_EVENT_START_FILE:
                 // event 6: 开始加载文件
                 brls::Logger::info("========> MPV_EVENT_START_FILE");
+                homeLedSetLoading();
 
                 // show osd for a really long time
                 mpvCoreEvent.fire(MpvEventEnum::START_FILE);
@@ -994,6 +1026,7 @@ void MPVCore::eventMainLoop() {
                     playbackTrace(mpvErrorString(node->error));
                     mpv_error_code = node->error;
                     brls::Logger::error("========> MPV ERROR: {}", mpvErrorString(node->error));
+                    homeLedSetError();
                     mpvCoreEvent.fire(MpvEventEnum::MPV_FILE_ERROR);
                 }
 #ifdef BOREALIS_USE_GXM
@@ -1200,6 +1233,27 @@ void MPVCore::reset() {
 
 void MPVCore::setUrl(const std::string &url, const std::string &extra, const std::string &method) {
     brls::Logger::debug("{} Url: {}, extra: {}", method, url, extra);
+    {
+        char b[240];
+        const bool net = url.rfind("http://", 0) == 0 ||
+                         url.rfind("https://", 0) == 0;
+        const bool ani = url.rfind("ani://", 0) == 0;
+        snprintf(b, sizeof(b),
+                 "player: setUrl method=%s net=%d ani=%d allowNet=%d path=%s",
+                 method.c_str(), net ? 1 : 0, ani ? 1 : 0,
+                 ALLOW_NETWORK_URL ? 1 : 0,
+                 net ? url.c_str() : url.c_str());
+        playbackTrace(b);
+#if defined(__SWITCH__)
+        if (net && !ALLOW_NETWORK_URL) {
+            playbackTrace("player: setUrl REJECTED network url (seamless mode)");
+            return;
+        }
+        if (net && ALLOW_NETWORK_URL) {
+            playbackTrace("player: setUrl NETWORK allowed (mpv-direct experiment)");
+        }
+#endif
+    }
     if (extra.empty()) {
         command_async("loadfile", url, method);
     } else {

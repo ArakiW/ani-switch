@@ -4,10 +4,12 @@
 #include "player/tsvitch_svg_image.hpp"
 #include "player/tsvitch_video_profile.hpp"
 #include "player/mpv_core.hpp"
+#include "utils/config_helper.hpp"
 #include <borealis/views/label.hpp>
 #include <borealis/views/progress_spinner.hpp>
 #include <borealis/core/logger.hpp>
 #include <fmt/format.h>
+#include <cstdio>
 #include <ctime>
 
 #if defined(__SWITCH__)
@@ -30,6 +32,18 @@ VideoView::VideoView() {
         VLOG("VideoView: XML inflate failed");
     }
     brls::Logger::info("VideoView (TsVitch graft): create");
+    if (osdSlider) {
+        // wiliwili: seek by real_duration when set, else percent.
+        osdSlider->getProgressSetEvent()->subscribe([this](float progress) {
+            showOSD(true);
+            if (real_duration_ > 0) {
+                mpvCore_->seek(static_cast<int64_t>(
+                    static_cast<float>(real_duration_) * progress));
+            } else {
+                mpvCore_->seekPercent(progress);
+            }
+        });
+    }
     if (btnToggle) {
         btnToggle->registerClickAction([this](brls::View*) {
             togglePlay();
@@ -39,12 +53,22 @@ VideoView::VideoView() {
 }
 
 VideoView::~VideoView() {
+    VLOG("VideoView: dtor begin");
     unRegisterMpvEvent();
+    VLOG("VideoView: dtor done");
 }
 
 void VideoView::setUrl(const std::string& url) {
     showLoading();
     hideCenterHint();
+    {
+        char b[200];
+        snprintf(b, sizeof(b), "VideoView: setUrl len=%zu net=%d allowNet=%d",
+                 url.size(),
+                 (url.rfind("http", 0) == 0) ? 1 : 0,
+                 aniswitch::MPVCore::ALLOW_NETWORK_URL ? 1 : 0);
+        VLOG(b);
+    }
     // Animeko-source HLS mirrors require a Referer; set before loadfile.
     if (url.find("m3u8") != std::string::npos ||
         url.find("rrcdnbf") != std::string::npos ||
@@ -56,7 +80,18 @@ void VideoView::setUrl(const std::string& url) {
                                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                                 "Chrome/120.0.0.0 Safari/537.36");
     }
-    mpvCore_->setUrl(url);
+    // wiliwili-style extra for network loads: referrer + timeout + proxy.
+    if (url.rfind("http://", 0) == 0 || url.rfind("https://", 0) == 0) {
+        std::string extra =
+            "referrer=\"https://www.akianime.cc/\",network-timeout=8";
+        const auto proxy = aniswitch::ProgramConfig::instance().getProxy();
+        if (!proxy.empty()) {
+            extra += ",http-proxy=\"" + proxy + "\"";
+        }
+        mpvCore_->setUrl(url, extra);
+    } else {
+        mpvCore_->setUrl(url);
+    }
     registerMpvEvent();
     brls::Logger::info("VideoView: setUrl {}", url);
 }
@@ -155,6 +190,20 @@ float VideoView::getProgress() {
     return osdSlider ? osdSlider->getProgress() : 0.f;
 }
 
+void VideoView::setRealDuration(int seconds) {
+    real_duration_ = seconds > 0 ? seconds : 0;
+    if (real_duration_ > 0) {
+        const int s = real_duration_;
+        setDuration(fmt::format("{:d}:{:02d}", s / 60, s % 60));
+        if (mpvCore_) {
+            const double p = static_cast<double>(mpvCore_->video_progress);
+            setProgress(static_cast<float>(p / static_cast<double>(real_duration_)));
+        }
+    }
+}
+
+int VideoView::getRealDuration() const { return real_duration_; }
+
 void VideoView::setVideoMode() {}
 void VideoView::setLiveMode() {}
 void VideoView::setAdMode() {}
@@ -196,36 +245,77 @@ void VideoView::registerMpvEvent() {
         this->invalidate();
         switch (event) {
             case MpvEventEnum::LOADING_START:
+                VLOG("player: loading start");
                 showLoading();
                 break;
             case MpvEventEnum::LOADING_END:
+                VLOG("player: loading end");
+                hideLoading();
+                hideCenterHint();
+                this->invalidate();
+                break;
             case MpvEventEnum::MPV_PAUSE:
+                VLOG("player: pause");
+                hideLoading();
+                hideCenterHint();
+                this->invalidate();
+                break;
             case MpvEventEnum::MPV_RESUME:
+                VLOG("player: play");
+                hideLoading();
+                hideCenterHint();
+                this->invalidate();
+                break;
             case MpvEventEnum::MPV_LOADED:
+                VLOG("player: mpv loaded");
+                hideLoading();
+                hideCenterHint();
+                this->invalidate();
+                break;
             case MpvEventEnum::START_FILE:
+                VLOG("player: start file");
                 hideLoading();
                 hideCenterHint();
                 this->invalidate();
                 break;
             case MpvEventEnum::UPDATE_DURATION: {
-                double d = mpvCore_->getDouble("duration");
-                if (d <= 0) d = static_cast<double>(mpvCore_->video_progress);
+                double d = 0;
+                if (real_duration_ > 0) {
+                    d = static_cast<double>(real_duration_);
+                } else {
+                    d = mpvCore_->getDouble("duration");
+                    if (d <= 0) d = static_cast<double>(mpvCore_->duration);
+                    if (d <= 0) d = static_cast<double>(mpvCore_->video_progress);
+                }
                 int s = static_cast<int>(d);
                 setDuration(fmt::format("{:d}:{:02d}", s / 60, s % 60));
                 break;
             }
             case MpvEventEnum::UPDATE_PROGRESS: {
-                double d = mpvCore_->getDouble("duration");
                 double p = static_cast<double>(mpvCore_->video_progress);
+                double d = 0;
+                if (real_duration_ > 0) {
+                    d = static_cast<double>(real_duration_);
+                } else {
+                    d = mpvCore_->getDouble("duration");
+                    if (d <= 0) d = static_cast<double>(mpvCore_->duration);
+                }
                 if (d > 0) setProgress(static_cast<float>(p / d));
                 int s = static_cast<int>(p);
                 setPlaybackTime(fmt::format("{:d}:{:02d}", s / 60, s % 60));
+                // Right label always shows full real duration when known.
+                if (real_duration_ > 0) {
+                    const int rd = real_duration_;
+                    setDuration(fmt::format("{:d}:{:02d}", rd / 60, rd % 60));
+                }
                 break;
             }
             case MpvEventEnum::END_OF_FILE:
+                VLOG("player: end of file");
                 if (onEndCb_) onEndCb_();
                 break;
             case MpvEventEnum::MPV_FILE_ERROR:
+                VLOG("player: file error (UI)");
                 hideLoading();
                 setCenterHintText("播放失败");
                 break;
@@ -248,6 +338,10 @@ void VideoView::draw(NVGcontext* vg, float x, float y, float width, float height
     // Paint mpv FIRST every frame (same as aniswitch::VideoView).
     if (mpvCore_ && mpvCore_->isValid() && width > 0 && height > 0) {
         mpvCore_->draw(brls::Rect(x, y, width, height), 1.0f);
+        if (!loggedFirstFrame_) {
+            loggedFirstFrame_ = true;
+            VLOG("player: first frame drawn");
+        }
     }
     // OSD chrome on top of the video.
     Box::draw(vg, x, y, width, height, style, ctx);

@@ -36,6 +36,7 @@ private:
     bool subscribed_ = false;
     size_t subscription_ = 0;
     std::shared_ptr<int> lifetime_ = std::make_shared<int>(0);
+    std::string seamlessId_;
 
     VideoView* video_ = nullptr;
 };

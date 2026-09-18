@@ -14,17 +14,27 @@
 //   * the dynamic_cast on getContentView is replaced with the
 //     raw `contentView` member access; borealis 5f08b286 makes
 //     `contentView` a public field on Activity
+//
+// v22 chrome: type scale (display 36 / h1 32 / caption 16 / body 20),
+// theme::k* colors instead of tokenColor, 88px theme rows via
+// chrome::makeListRow, final CTA chrome::makePrimaryButton 56h,
+// footer buttons kButtonHeight + applyFocusStyle. 5-step logic +
+// startupLog + crash guards unchanged.
 
 #include "ui/activity/onboarding_activity.hpp"
 #include "ui/theme.hpp"
+#include "ui/ui_chrome.hpp"
+#include "net/bgm_auth.hpp"
+#include "net/bgm_client.hpp"
 #include "utils/activity_helper.hpp"
 #include "utils/config_helper.hpp"
 #include <borealis/core/application.hpp>
 #include <borealis/core/theme.hpp>
 #include <borealis/core/logger.hpp>
+#include <borealis/core/thread.hpp>
 #include <fmt/format.h>
 
-#if defined(__SWITCH__) && defined(ANISWITCH_SWITCH_DEBUG)
+#if defined(__SWITCH__)
 extern "C" void aniswitchStartupLog(const char* message);
 namespace { inline void onboardLog(const char* m) { aniswitchStartupLog(m); } }
 #else
@@ -33,28 +43,20 @@ namespace { inline void onboardLog(const char*) {} }
 
 namespace aniswitch {
 
-namespace {
-
-// Read a token from the active theme without depending on
-// inline const NVGcolor.  Falls back to a visible-but-neutral
-// gray if the token is missing so the screen never goes black
-// even on a theme-misconfigured build.
-NVGcolor tokenColor(const char* token, NVGcolor fallback) {
-    auto theme = brls::Application::getTheme();
-    if (theme.getColor(token).a > 0.0f) return theme.getColor(token);
-    return fallback;
-}
-
-}  // namespace
-
 OnboardingActivity::OnboardingActivity() = default;
 
 void OnboardingActivity::onContentAvailable() {
     onboardLog("[onboard] onContentAvailable begin");
     try {
+        // Keep root as Box (v17.6.1 layout contract) but apply v22 chrome.
         auto* root = new brls::Box();
         root->setAxis(brls::Axis::COLUMN);
-        root->setPadding(40, 30, 40, 20);
+        root->setBackgroundColor(theme::kChromeBg);
+        root->setPadding(theme::kSafeMarginTop, theme::kSafeMarginX,
+                         theme::kSafeMarginBot, theme::kSafeMarginX);
+#ifdef __SWITCH__
+        root->setWidth(theme::kDesignWidth);
+#endif
         // v17.6.1: removed setJustifyContent(SPACE_BETWEEN) —
         // combined with the dynamic_cast in renderStep() it
         // crashed on first frame in some configurations.
@@ -94,16 +96,13 @@ void OnboardingActivity::renderStep() {
 }
 
 void OnboardingActivity::buildStepWelcome(brls::Box* root) {
-    auto* title = new brls::Label();
-    title->setText("欢迎使用 ani-switch");
-    title->setFontSize(32);
-    title->setMarginBottom(12);
-    root->addView(title);
+    // Welcome hero — type-display 36.
+    root->addView(chrome::makeTitle("欢迎使用 ani-switch", theme::kTypeDisplay, 12));
 
     auto* sub = new brls::Label();
     sub->setText("Switch 上的 Bangumi 番剧客户端。");
-    sub->setFontSize(16);
-    sub->setTextColor(tokenColor("ani_accent", nvgRGB(255, 105, 120)));
+    sub->setFontSize(theme::kTypeCaption);
+    sub->setTextColor(theme::kAccent);
     sub->setMarginBottom(24);
     root->addView(sub);
 
@@ -118,71 +117,64 @@ void OnboardingActivity::buildStepWelcome(brls::Box* root) {
     );
     body->setFontSize(theme::kTypeBody);
     body->setSingleLine(false);
+    body->setTextColor(theme::kDarkTextPrimary);
     body->setMarginBottom(20);
     root->addView(body);
 }
 
 void OnboardingActivity::buildStepTheme(brls::Box* root) {
-    auto* title = new brls::Label();
-    title->setText("主题");
-    title->setFontSize(28);
-    title->setMarginBottom(8);
-    root->addView(title);
-
-    auto* sub = new brls::Label();
-    sub->setText("先选一个, 之后可以在设置里随时切换。");
-    sub->setFontSize(theme::kTypeCaption);
-    sub->setTextColor(tokenColor("ani_text_secondary", nvgRGB(180, 180, 180)));
-    sub->setMarginBottom(24);
-    root->addView(sub);
+    // Step title — type-h1 32.
+    root->addView(chrome::makeTitle("主题", theme::kTypeH1, 8));
+    root->addView(chrome::makeCaption("先选一个, 之后可以在设置里随时切换。", 24));
 
     auto& cfg = ProgramConfig::instance();
     const int currentIdx = cfg.getSettingItem<int>(SettingItem::APP_THEME, 0);
 
     const char* names[]  = {"自动", "亮", "暗"};
     for (int i = 0; i < 3; ++i) {
-        auto* row = new brls::Box();
-        row->setAxis(brls::Axis::ROW);
-        row->setPadding(0, 0, 0, 6);
-        row->setMarginBottom(8);
+        const bool selected = (i == currentIdx);
+        // v22: 88px chrome list row + chip-like selection state.
+        auto* row = chrome::makeListRow(theme::kRowHeight);
 
         auto* swatch = new brls::Rectangle();
         swatch->setSize(brls::Size(28, 28));
-        swatch->setColor(tokenColor("ani_accent", nvgRGB(255, 105, 120)));
+        swatch->setColor(theme::kAccent);
+        swatch->setMarginRight(12);
         row->addView(swatch);
 
         auto* label = new brls::Label();
-        label->setText(fmt::format("  {}{}", names[i], (i == currentIdx) ? "  ✓ 当前" : ""));
-        label->setFontSize(18);
-        if (i == currentIdx)
-            label->setTextColor(tokenColor("ani_accent", nvgRGB(255, 105, 120)));
+        label->setText(names[i]);
+        label->setFontSize(theme::kTypeH3);
+        label->setTextColor(selected ? theme::kAccentBright
+                                     : theme::kDarkTextPrimary);
+        label->setGrow(1.0f);
         row->addView(label);
 
-        auto* btn = new brls::Button();
-        btn->setText((i == currentIdx) ? "已选" : "选择");
-        btn->setMarginLeft(20);
-        btn->registerClickAction([i](brls::View*) {
+        // makeChip-like status pill; selection click stays on the row
+        // so focus land is the full 88px target (Switch 10-foot).
+        auto* state = chrome::makeChip(selected ? "当前" : "选择", selected, nullptr);
+        state->setFocusable(false);
+        row->addView(state);
+
+        // Same theme-switch logic as v17 — no renderStep() so the
+        // row labels stay until the user advances a step.
+        row->registerClickAction([i](brls::View*) {
             ProgramConfig::instance().setSettingItem<int>(
                 SettingItem::APP_THEME, i);
             aniswitch::theme::applyTheme(
                 aniswitch::theme::themeChoiceFromIndex(i));
             return true;
         });
-        row->addView(btn);
         root->addView(row);
     }
 }
 
 void OnboardingActivity::buildStepLogin(brls::Box* root) {
-    auto* title = new brls::Label();
-    title->setText("Bangumi 账号");
-    title->setFontSize(28);
-    title->setMarginBottom(12);
-    root->addView(title);
+    root->addView(chrome::makeTitle("Bangumi 账号", theme::kTypeH1, 12));
+    root->addView(chrome::makeCaption("登录不是播放前提。", 12));
 
     auto* body = new brls::Label();
     body->setText(
-        "登录不是播放前提。\n\n"
         "• 公开浏览 (番剧搜索 / 详情 / 角色 / 评分) 不需要登录\n"
         "• 登录后可以:\n"
         "  - 同步「我的收藏」(5 状态: 想看 / 在看 / 看过 / 搁置 / 抛弃)\n"
@@ -193,16 +185,13 @@ void OnboardingActivity::buildStepLogin(brls::Box* root) {
     );
     body->setFontSize(theme::kTypeBody);
     body->setSingleLine(false);
+    body->setTextColor(theme::kDarkTextPrimary);
     body->setMarginBottom(20);
     root->addView(body);
 }
 
 void OnboardingActivity::buildStepDataSources(brls::Box* root) {
-    auto* title = new brls::Label();
-    title->setText("数据源");
-    title->setFontSize(28);
-    title->setMarginBottom(12);
-    root->addView(title);
+    root->addView(chrome::makeTitle("数据源", theme::kTypeH1, 12));
 
     auto* body = new brls::Label();
     body->setText(
@@ -217,34 +206,45 @@ void OnboardingActivity::buildStepDataSources(brls::Box* root) {
     );
     body->setFontSize(theme::kTypeBody);
     body->setSingleLine(false);
+    body->setTextColor(theme::kDarkTextPrimary);
     body->setMarginBottom(20);
     root->addView(body);
 }
 
 void OnboardingActivity::buildStepDone(brls::Box* root) {
-    auto* title = new brls::Label();
-    title->setText("准备好了");
-    title->setFontSize(32);
-    title->setMarginBottom(12);
-    root->addView(title);
+    // Done hero — type-display 36.
+    root->addView(chrome::makeTitle("准备好了", theme::kTypeDisplay, 12));
 
     auto* sub = new brls::Label();
-    sub->setText("按 A 进入主页, 之后在「设置」里可以重新走引导。");
-    sub->setFontSize(theme::kTypeBody);
-    sub->setTextColor(tokenColor("ani_text_secondary", nvgRGB(180, 180, 180)));
-    sub->setMarginBottom(20);
+    sub->setText("按「进入应用」前建议先输入登录码（可跳过）。\n"
+                 "之后在「设置」里可以重新走引导。");
+    sub->setFontSize(theme::kTypeCaption);
+    sub->setTextColor(theme::kDarkTextSecondary);
+    sub->setMarginBottom(16);
     root->addView(sub);
 
-    auto* enter = new brls::Button();
-    enter->setText("进入应用  →");
-    enter->setFontSize(22);
-    enter->registerClickAction([](brls::View*) {
+    // v22.2: manual entry also routes through the shared prompt helper
+    // so skip/shown flags stay consistent with the deferred dialog.
+    root->addView(chrome::makeSecondaryButton(
+        "输入登录码 (PAT / 授权码)",
+        []() { promptFirstRunLoginCode(nullptr); },
+        12));
+
+    // Final CTA — chrome primary 56h. markFirstRunDone stays here
+    // (onboarding complete); login-code dialog is deferred until Main
+    // is on the stack (brls::Dialog + ImeManager — least crash-prone).
+    auto* enter = chrome::makePrimaryButton("进入应用  →", []() {
         ProgramConfig::instance().markFirstRunDone();
         brls::Application::popActivity(
             brls::TransitionAnimation::FADE,
-            []() { aniswitch::Intent::openMain(); });
-        return true;
-    });
+            []() {
+                aniswitch::Intent::openMain();
+                if (firstRunLoginCodePromptNeeded()) {
+                    brls::delay(600, []() { promptFirstRunLoginCode(nullptr); });
+                }
+            });
+    }, 8);
+    enter->setFontSize(theme::kTypeH3);
     root->addView(enter);
 }
 
@@ -253,9 +253,12 @@ void OnboardingActivity::buildFooter(brls::Box* root) {
     footer->setAxis(brls::Axis::ROW);
     footer->setMarginTop(24);
     footer->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
+    footer->setAlignItems(brls::AlignItems::CENTER);
 
     auto* prev = new brls::Button();
     prev->setText(currentStep_ > 0 ? "← 上一步" : " ");
+    prev->setHeight(theme::kButtonHeight);
+    theme::applyFocusStyle(prev);
     if (currentStep_ > 0) {
         prev->registerClickAction([this](brls::View*) {
             if (currentStep_ > 0) --currentStep_;
@@ -267,12 +270,12 @@ void OnboardingActivity::buildFooter(brls::Box* root) {
 
     auto* dots = new brls::Box();
     dots->setAxis(brls::Axis::ROW);
+    dots->setAlignItems(brls::AlignItems::CENTER);
     for (int i = 0; i < kStepCount; ++i) {
         auto* dot = new brls::Rectangle();
         dot->setSize(brls::Size(12, 12));
-        dot->setColor(i == currentStep_
-                          ? tokenColor("ani_accent", nvgRGB(255, 105, 120))
-                          : tokenColor("ani_text_muted", nvgRGB(140, 140, 140)));
+        dot->setColor(i == currentStep_ ? theme::kAccent
+                                        : theme::kDarkTextMuted);
         dot->setMarginLeft(4);
         dot->setMarginRight(4);
         dots->addView(dot);
@@ -280,6 +283,8 @@ void OnboardingActivity::buildFooter(brls::Box* root) {
     footer->addView(dots);
 
     auto* next = new brls::Button();
+    next->setHeight(theme::kButtonHeight);
+    theme::applyFocusStyle(next);
     if (currentStep_ < kStepCount - 1) {
         next->setText("下一步 →");
         next->registerClickAction([this](brls::View*) {
@@ -293,7 +298,12 @@ void OnboardingActivity::buildFooter(brls::Box* root) {
             ProgramConfig::instance().markFirstRunDone();
             brls::Application::popActivity(
                 brls::TransitionAnimation::FADE,
-                []() { aniswitch::Intent::openMain(); });
+                []() {
+                    aniswitch::Intent::openMain();
+                    if (firstRunLoginCodePromptNeeded()) {
+                        brls::delay(600, []() { promptFirstRunLoginCode(nullptr); });
+                    }
+                });
             return true;
         });
     }

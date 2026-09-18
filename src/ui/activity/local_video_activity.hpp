@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
 //
-// v17.4: Local cache / video file browser.  Lists everything the
-// LocalVideoScanner finds on the SD card, grouped by source
-// directory, and lets the user play any of them via the existing
-// PlayerActivity (which already short-circuits when videoSource_
-// is not "http" — see player_activity.cpp).
+// v17.4: Local cache / video file browser.
+// v22: anime-name grouping + unified chrome (section headers,
+// list rows, HUD). Lists everything LocalVideoScanner finds,
+// grouped by LocalVideoEntry::series, and plays via the existing
+// PlayerActivity (videoSource_ short-circuits when not "http").
 
 #pragma once
 

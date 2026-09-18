@@ -2,6 +2,8 @@
 
 #include "ui/activity/log_activity.hpp"
 #include "ui/theme.hpp"
+#include "ui/ui_chrome.hpp"
+#include "ui/hud.hpp"
 #include <borealis/core/application.hpp>
 #include <borealis/views/dialog.hpp>
 #include <fmt/format.h>
@@ -44,72 +46,58 @@ std::string readFile(const std::string& path) {
 LogActivity::LogActivity() = default;
 
 void LogActivity::onContentAvailable() {
-    auto* root = new brls::Box();
-    root->setAxis(brls::Axis::COLUMN);
-    root->setPadding(20, 20, 20, 20);
+    auto* root = chrome::makePageRoot();
 
-    auto* title = new brls::Label();
-    title->setText("启动日志");
-    title->setFontSize(24);
-    title->setMarginBottom(4);
-    root->addView(title);
+    root->addView(chrome::makeTitle("启动日志", theme::kTypeH1, 4));
 
     statusLabel_ = new brls::Label();
     statusLabel_->setFontSize(theme::kTypeCaption);
-    statusLabel_->setTextColor(aniswitch::theme::kDarkTextSecondary);
-    statusLabel_->setMarginBottom(8);
+    statusLabel_->setTextColor(theme::kDarkTextSecondary);
+    statusLabel_->setSingleLine(false);
+    statusLabel_->setMarginBottom(12);
     root->addView(statusLabel_);
 
-    auto* btnRow = new brls::Box();
-    btnRow->setAxis(brls::Axis::ROW);
-    btnRow->setMarginBottom(12);
+    root->addView(chrome::makeSection("操作", 8));
 
-    auto* reloadBtn = new brls::Button();
-    reloadBtn->setText("重新读取");
-    reloadBtn->registerClickAction([this](brls::View*) {
-        reload();
-        return true;
-    });
-    btnRow->addView(reloadBtn);
+    // Primary = reload (safe, frequent). Clear is secondary (destructive).
+    root->addView(chrome::makePrimaryButton(
+        "重新读取",
+        [this]() {
+            reload();
+        },
+        8));
 
-    auto* spacer = new brls::Box();
-    spacer->setWidth(16);
-    btnRow->addView(spacer);
+    root->addView(chrome::makeSecondaryButton(
+        "清空日志",
+        []() {
+            auto* dlg = new brls::Dialog(
+                "确定要清空 startup.log?  崩溃时清空就再也看不到堆栈了。");
+            dlg->setCancelable(true);
+            dlg->addButton("取消", []() {});
+            dlg->addButton("清空", []() {
+                const std::string path = resolveLogPath();
+                FILE* fp = std::fopen(path.c_str(), "w");
+                if (fp) {
+                    std::fclose(fp);
+                }
+            });
+            dlg->open();
+        },
+        12));
 
-    auto* clearBtn = new brls::Button();
-    clearBtn->setText("清空日志");
-    clearBtn->registerClickAction([](brls::View*) {
-        auto* dlg = new brls::Dialog("确定要清空 startup.log?  崩溃时清空就再也看不到堆栈了。");
-        dlg->setCancelable(true);
-        dlg->addButton("取消", []() {});
-        dlg->addButton("清空", []() {
-            const std::string path = resolveLogPath();
-            FILE* fp = std::fopen(path.c_str(), "w");
-            if (fp) {
-                std::fclose(fp);
-            }
-        });
-        dlg->open();
-        return true;
-    });
-    btnRow->addView(clearBtn);
+    root->addView(chrome::makeSection("日志内容", 8));
 
-    root->addView(btnRow);
-
-    // The log itself goes inside a ScrollingFrame so a 1000-line
-    // log doesn't push the buttons off-screen.
+    // Log body lives in this column; the page chrome scroll shell
+    // wraps the whole page (title + buttons + log) so long logs
+    // remain readable without a nested frame.
     logContainer_ = new brls::Box();
     logContainer_->setAxis(brls::Axis::COLUMN);
     logContainer_->setPadding(0, 0, 0, 0);
-    auto* scroll = new brls::ScrollingFrame();
-    scroll->setContentView(logContainer_);
-    root->addView(scroll);
+    root->addView(logContainer_);
 
-    setContentView(root);
-    registerAction("返回", brls::BUTTON_B, [](brls::View*) {
-        brls::Application::popActivity();
-        return true;
-    });
+    auto* shell = chrome::attachScrollShell(this, root);
+    chrome::registerBack(this);
+    chrome::finish(this, shell);
 
     reload();
 }
@@ -129,6 +117,7 @@ void LogActivity::reload() {
     auto* log = new brls::Label();
     log->setText(content);
     log->setFontSize(theme::kTypeCaption);
+    log->setTextColor(theme::kDarkTextSecondary);
     log->setSingleLine(false);
     logContainer_->addView(log);
 }

@@ -1,19 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0
 //
-// v18.6: animeko 6.1.0 `ui-settings/SettingsScreen` ported as a
-// top-level SettingsActivity with a TabFrame.  Five tabs:
-//   1. 通用 (AppSettingsTab) — theme / hardware decode /
-//      danmaku toggles (lifted from the v17.0 flat setting
-//      page).
-//   2. Bangumi 同步 (AccountTab) — Bangumi OAuth login +
-//      BangumiSyncTab + ani EmailLogin.
-//   3. 关于 (AboutTab) — version + license + acknowledgements.
-//   4. 调试 (DebugTab) — startup.log path + last lines.
+// v18.6/v22: multi-page Settings twin. NOT the live settings path —
+// Intent::openSettings() routes to SettingActivity (make_setting_activity)
+// since v20.11 (this class native-crashed after TabFrame). Kept compiled
+// and chrome-aligned for a future re-enable; flat list only, no TabFrame.
 //
-// animeko's full settings tree has 11+ tabs (network, media
-// selector, theme preview, log, debug, about, account,
-// update, etc.).  v18.6 ships the four most-used and leaves
-// the rest for v18.7+.
+// Groups: 通用 / 播放 / 网络 / 账号 / 关于 / 调试.
 
 #pragma once
 
